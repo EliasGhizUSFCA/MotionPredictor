@@ -93,13 +93,18 @@ export function interpAt(times: number[], pts: Pt[], t: number): Pt | null {
   return null; // beyond available data
 }
 
-/** ADE/FDE of a predicted path against an observed path up to time `upTo` (inclusive), sampled at prediction times. */
-export function partialErrors(predT: number[], pred: Pt[], actT: number[], act: Pt[], upTo: number): { ade: number; fde: number; n: number } | null {
+/** Tolerance (s) within which the backend still scores a horizon whose ground truth ends early (engine.py: gt[-1] < h - 0.15 is excluded). */
+export const GT_END_TOLERANCE_S = 0.15;
+
+/** ADE/FDE of a predicted path against an observed path up to time `upTo` (inclusive), sampled at prediction times.
+ * Like scoring.py (np.interp), the actual path is held at its last sample for times at most `clampTol` s after it. */
+export function partialErrors(predT: number[], pred: Pt[], actT: number[], act: Pt[], upTo: number, clampTol = GT_END_TOLERANCE_S): { ade: number; fde: number; n: number } | null {
   const errs: number[] = [];
+  const last = actT.length ? actT[actT.length - 1] : -Infinity;
   for (let i = 0; i < predT.length; i++) {
     const t = predT[i];
     if (t <= 1e-6 || t > upTo + 1e-6) continue;
-    const a = interpAt(actT, act, t);
+    const a = interpAt(actT, act, t) ?? (t <= last + clampTol + 1e-6 ? act[act.length - 1] : null);
     if (!a) continue;
     errs.push(Math.hypot(pred[i][0] - a[0], pred[i][1] - a[1]));
   }
@@ -144,4 +149,41 @@ export function applyH(Hm: number[][], p: Pt, sign = 1): Pt | null {
 /** Horizon key as written by the Python backend (str(float)): 3 -> "3.0", 0.5 -> "0.5". */
 export function hk(h: number): string {
   return Number.isInteger(h) ? h.toFixed(1) : String(h);
+}
+
+/** Inverse of a 3x3 matrix (row-major); null when singular. */
+export function inv3(m: number[][]): number[][] | null {
+  const [[a, b, c], [d, e, f], [g, h, i]] = m;
+  const A = e * i - f * h, B = -(d * i - f * g), C = d * h - e * g;
+  const det = a * A + b * B + c * C;
+  if (!Number.isFinite(det) || Math.abs(det) < 1e-15) return null;
+  return [
+    [A / det, -(b * i - c * h) / det, (b * f - c * e) / det],
+    [B / det, (a * i - c * g) / det, -(a * f - c * d) / det],
+    [C / det, -(a * h - b * g) / det, (a * e - b * d) / det],
+  ];
+}
+
+/** Position of an observed track ([t, x, y, ...] rows sorted by t) at time t, if observed within `maxGap` s of t. */
+export function trackPosAt(obs: readonly (readonly [number, number, number, ...unknown[]] | readonly number[])[], t: number, maxGap = 0.5): Pt | null {
+  if (!obs.length) return null;
+  let i = obs.findIndex((o) => o[0] >= t);
+  if (i === -1) return t - obs[obs.length - 1][0] <= maxGap ? [obs[obs.length - 1][1], obs[obs.length - 1][2]] : null;
+  if (i === 0) return obs[0][0] - t <= maxGap ? [obs[0][1], obs[0][2]] : null;
+  const [p, q] = [obs[i - 1], obs[i]];
+  if (q[0] - p[0] > 2 * maxGap) return null; // gap in the track - do not invent a position
+  const a = (t - p[0]) / Math.max(q[0] - p[0], 1e-9);
+  return [p[1] + a * (q[1] - p[1]), p[2] + a * (q[2] - p[2])];
+}
+
+/** Stored forecast nearest to time t, preferring the latest one made at or before t (causal), else the earliest after it. */
+export function nearestForecast<T extends { t: number }>(preds: T[], t: number): T | undefined {
+  let before: T | undefined;
+  let after: T | undefined;
+  for (const p of preds) {
+    if (p.t <= t + 1e-6) {
+      if (!before || p.t > before.t) before = p;
+    } else if (!after || p.t < after.t) after = p;
+  }
+  return before ?? after;
 }

@@ -139,15 +139,20 @@ class ByteTracker:
         self.min_hits = min_hits
         self.reset()
 
-    def reset(self) -> None:
+    def reset(self, keep_ids: bool = False) -> None:
+        """Drop every track. ``keep_ids=True`` continues the id counter, so ids are never reused
+        within one run (e.g. after a camera cut or a timestamp discontinuity)."""
         self.tracks: list[Track] = []
-        self.next_id = 1
+        if not keep_ids or not hasattr(self, "next_id"):
+            self.next_id = 1
         self.last_t: float | None = None
         self.removed_ids: list[int] = []
         self.frame_count = 0
 
     def update(self, dets: list[Detection], t: float) -> dict:
         """Returns a summary dict of association statistics for diagnostics."""
+        if self.last_t is not None and t < self.last_t - 0.05:  # time went backwards: old tracks are meaningless
+            self.reset(keep_ids=True)
         dt = 0.0 if self.last_t is None else max(t - self.last_t, 1e-3)
         self.last_t = t
         self.frame_count += 1

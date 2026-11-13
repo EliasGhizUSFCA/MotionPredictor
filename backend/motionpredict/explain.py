@@ -24,6 +24,14 @@ def _dir_name(heading_deg: float, units: str) -> str:
     return f"heading {heading_deg:.0f} deg in the ground-plane frame"
 
 
+SOURCE_DESCRIPTIONS = {
+    "dataset_replay": "dataset replay: human-annotated ETH/UCY positions drawn on a synthetic top-down view - "
+                      "not camera detections and not a live camera",
+    "browser": "frames sent from the browser (webcam or video file), processed by the person detector and tracker",
+    "server": "frames read by the server from a local stream/file, processed by the person detector and tracker",
+}
+
+
 def facts_for_track(result: dict, track_id: int | None) -> dict[str, Any] | None:
     tracks = [t for t in result.get("tracks", []) if t.get("state") == "confirmed"]
     if track_id is not None:
@@ -33,7 +41,10 @@ def facts_for_track(result: dict, track_id: int | None) -> dict[str, Any] | None
     t = tracks[0]
     k = t.get("kinematics_world") or t.get("kinematics")
     f = t.get("forecast")
+    source = result.get("source")
     facts: dict[str, Any] = {
+        "data_source": source,
+        "data_source_description": SOURCE_DESCRIPTIONS.get(source, "unknown"),
         "track_id": t["track_id"],
         "tracked_for_s": t["age_s"],
         "tracker_confidence": t["tracker_confidence"],
@@ -41,6 +52,8 @@ def facts_for_track(result: dict, track_id: int | None) -> dict[str, Any] | None
         "height": t.get("height"),
         "warnings": result.get("warnings", []),
     }
+    if source == "dataset_replay" and result.get("held_out_for_active_model") is not None:
+        facts["held_out_for_active_model"] = result["held_out_for_active_model"]
     if k:
         facts["kinematics"] = {kk: k[kk] for kk in ("units", "speed", "heading_deg", "turn_rate_deg_s", "movement_state", "speed_category")}
     if f:
@@ -62,7 +75,11 @@ def facts_for_track(result: dict, track_id: int | None) -> dict[str, Any] | None
 
 
 def rule_based_summary(facts: dict) -> str:
-    parts = [f"Track {facts['track_id']} has been tracked for {facts['tracked_for_s']:.1f} s "
+    parts = []
+    if facts.get("data_source") == "dataset_replay":
+        parts.append("Dataset replay (demo): these are human-annotated positions from a public dataset shown on a synthetic "
+                     "top-down view, not detections from a live camera.")
+    parts += [f"Track {facts['track_id']} has been tracked for {facts['tracked_for_s']:.1f} s "
              f"(tracker confidence {facts['tracker_confidence']:.2f})."]
     k = facts.get("kinematics")
     if k:
@@ -105,6 +122,8 @@ SYSTEM = (
     "Never invent numbers, identities, intentions or measurements that are not in the facts. "
     "If probability_type is not 'calibrated_probability', call the values 'uncalibrated model weights', never probabilities or likelihoods. "
     "If the coordinate system is image_pixels, say speeds are in pixels per second and that real-world units are unknown. "
+    "Say where the data comes from using data_source_description: if data_source is 'dataset_replay', state clearly that "
+    "this is a replay of annotated dataset positions, not a live camera or camera detections. "
     "Mention relevant warnings. Never describe a forecast as certain. You are not the predictor; you only summarise its output."
 )
 

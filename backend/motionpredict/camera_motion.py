@@ -2,7 +2,9 @@
 
 Sparse Lucas-Kanade optical flow on background corners (person boxes masked out). The median
 background displacement approximates camera pan/shake. If it exceeds a threshold, apparent
-pedestrian motion is contaminated by camera motion and the UI shows a warning. Compensation
+pedestrian motion is contaminated by camera motion and the UI shows a warning. The threshold is
+a rate (fraction of the frame width per second), so the decision does not depend on how many
+frames per second are processed. Compensation
 is deliberately not applied (a single translation is a poor model of 3-D camera motion).
 """
 
@@ -13,9 +15,10 @@ import numpy as np
 
 
 class CameraMotionEstimator:
-    def __init__(self, work_width: int = 320, threshold_frac: float = 0.004):
+    def __init__(self, work_width: int = 320, threshold_frac_per_s: float = 0.04, assumed_fps: float = 10.0):
         self.work_width = work_width
-        self.threshold_frac = threshold_frac
+        self.threshold_frac_per_s = threshold_frac_per_s  # background shift, fraction of frame width per second
+        self.assumed_fps = assumed_fps  # used only when the frame interval is unknown / zero
         self.prev: np.ndarray | None = None
         self.prev_pts: np.ndarray | None = None
         self.scale = 1.0
@@ -41,11 +44,13 @@ class CameraMotionEstimator:
                 d = (nxt[ok] - self.prev_pts[ok]).reshape(-1, 2)
                 med = np.median(d, 0) / self.scale
                 mag = float(np.hypot(*med))
+                per_s = mag / dt if dt > 1e-3 else mag * self.assumed_fps
                 result = {
                     "available": True,
                     "shift_px": [float(med[0]), float(med[1])],
-                    "shift_px_per_s": mag / max(dt, 1e-3),
-                    "camera_moving": mag > self.threshold_frac * w,
+                    "shift_px_per_s": per_s,
+                    "threshold_px_per_s": self.threshold_frac_per_s * w,
+                    "camera_moving": per_s > self.threshold_frac_per_s * w,
                     "tracked_points": int(ok.sum()),
                 }
         self.prev = gray

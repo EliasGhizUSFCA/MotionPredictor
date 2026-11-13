@@ -43,7 +43,7 @@ export function BirdsEye({ result, selected, onSelect, highlight, setHighlight }
             t.points.forEach((p, i) => i % 3 === 0 && i > 0 && out.push({ kind: "ellipse", at: p, ellipse: t.sigma[i], color: col, width: 1, alpha: 0.35 * dim }));
           out.push({ kind: "line", pts: t.points, color: col, width: t.rank === 0 ? 2.5 : 1.8, dash: [6, 4], alpha: dim });
           const end = t.points.at(-1)!;
-          if (sel) out.push({ kind: "label", at: end, color: col, text: `${t.id} ${t.probability === null ? "" : (t.probability * 100).toFixed(0) + "%"}`, alpha: dim });
+          if (sel) out.push({ kind: "label", at: end, color: col, text: t.probability === null ? t.id : `${t.id} ${(t.probability * 100).toFixed(0)}%${f.probability_type === "calibrated_probability" ? "" : " (uncal.)"}`, alpha: dim });
         }
       }
       const gt = result.replay_ground_truth?.[String(tr.track_id)];
@@ -82,12 +82,13 @@ export function ProbabilityPanel({ track, setHighlight }: { track: TrackOut | nu
       <div className="flex flex-wrap gap-2 text-[11px]">
         <span className="chip">{f.prediction_source === "trained_model" ? "learned model" : "physics baseline"}</span>
         <span className="chip">{f.model_version}</span>
-        <span className={`chip ${f.probability_type === "calibrated_probability" ? "text-good" : "text-warn"}`}>
-          {f.probability_type === "calibrated_probability" ? "calibrated probabilities (held-out validated)" : f.probability_type === "none" ? "no route probabilities" : "uncalibrated weights"}
+        <span className={`chip ${f.probability_type === "calibrated_probability" ? "text-good" : "text-warn"}`} title={f.calibration_status}>
+          {f.probability_type === "calibrated_probability" ? "calibrated probabilities (checkpoint held-out validated)" : f.probability_type === "none" ? "no route probabilities" : "uncalibrated weights"}
         </span>
         <span className="chip">{f.coordinate_system}</span>
         <span className="chip">history {f.history_steps_used} steps</span>
       </div>
+      {f.calibration_status && f.probability_type !== "none" && <p className="text-[10px] text-dim">{f.calibration_status}</p>}
       {hasP ? (
         <div className="h-28">
           <ResponsiveContainer>
@@ -140,7 +141,7 @@ export function ProbabilityPanel({ track, setHighlight }: { track: TrackOut | nu
           ))}
         </tbody>
       </table>
-      <p className="text-[11px] text-dim">Calibration status: {f.calibration_status}. Three discrete paths are not a complete spatial probability density.</p>
+      <p className="text-[11px] text-dim">Calibration status: {f.calibration_status}. {pathCountText(f.trajectories.length)} not a complete spatial probability density.</p>
       {f.warnings.map((w) => (
         <p key={w} className="text-[11px] text-warn">
           ⚠ {w}
@@ -150,8 +151,18 @@ export function ProbabilityPanel({ track, setHighlight }: { track: TrackOut | nu
   );
 }
 
+const NUM_WORDS = ["Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten"];
+function pathCountText(n: number): string {
+  const w = NUM_WORDS[n] ?? String(n);
+  return n === 1 ? "A single discrete path is" : `${w} discrete paths are`;
+}
+
 export function KinematicsCharts({ history, trackId }: { history: FrameResult[]; trackId: number | null }) {
   const [which, setWhich] = useState<"speed" | "accel" | "heading" | "turn">("speed");
+  // `history` is mutated in place by useStream (push/splice), so its identity never changes while
+  // streaming. Key the memo on the latest frame as well, or the chart freezes after the first render.
+  const latest = history.at(-1);
+  const version = `${history.length}:${latest?.session_id ?? ""}:${latest?.frame_id ?? -1}:${latest?.server_done_ms ?? 0}`;
   const series = useMemo(() => {
     if (trackId === null || !history.length) return [];
     const t0 = history.at(-1)!.server_done_ms;
@@ -178,7 +189,8 @@ export function KinematicsCharts({ history, trackId }: { history: FrameResult[];
       out.push({ t: (r.server_done_ms - t0) / 1000, v });
     }
     return out;
-  }, [history, trackId, which]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [history, version, trackId, which]);
   const last = history.at(-1)?.tracks.find((x) => x.track_id === trackId);
   const units = (last?.kinematics_world ?? last?.kinematics)?.units === "m" ? "m" : "px";
   const unit = { speed: `${units}/s`, accel: `${units}/s²`, heading: "deg", turn: "deg/s" }[which];

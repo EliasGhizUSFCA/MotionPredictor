@@ -11,6 +11,8 @@ import { fmt } from "@/lib/viz";
 
 const HORIZONS = [0.5, 1, 2, 3, 5];
 const CAL_KEY = "motionpredict.calibration";
+// Backend Session warning (contract C4) when frame timestamps go backwards; per-person state is reset.
+const TS_RESET_PREFIX = "Timestamps went backwards";
 
 function Metric({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
   return (
@@ -71,6 +73,16 @@ export default function LiveConsole({ health }: { health: Health | null }) {
   }, []);
 
   const r = s.result;
+  // The reset warning only appears on the one frame where it happened; keep it visible for a few seconds.
+  const [resetNotice, setResetNotice] = useState<string | null>(null);
+  useEffect(() => {
+    const w = r?.warnings.find((x) => x.startsWith(TS_RESET_PREFIX));
+    if (!w) return;
+    setResetNotice(w);
+    setSelected(null);
+    const id = setTimeout(() => setResetNotice(null), 5000);
+    return () => clearTimeout(id);
+  }, [r]);
   const track: TrackOut | null = useMemo(() => {
     if (!r) return null;
     const conf = r.tracks.filter((t) => t.state === "confirmed");
@@ -112,7 +124,13 @@ export default function LiveConsole({ health }: { health: Health | null }) {
   const doExplain = async () => {
     if (!r) return;
     try {
-      setExplain(await postJSON("/api/explain", { track_id: activeId, use_llm: useLlm, result: r }));
+      setExplain(
+        await postJSON("/api/explain", {
+          track_id: activeId,
+          use_llm: useLlm,
+          result: r.source === "dataset_replay" ? { ...r, held_out_for_active_model: s.demoInfo?.held_out_for_active_model ?? null } : r,
+        }),
+      );
     } catch (e: any) {
       setExplain({ ok: false, error: String(e.message ?? e) });
     }
@@ -120,28 +138,42 @@ export default function LiveConsole({ health }: { health: Health | null }) {
 
   const running = s.status === "streaming" || s.status === "paused" || s.status === "connecting";
   const metric = r?.camera_calibration.coordinate_system === "ground_plane_meters";
+  // Incoming frame rate: the browser measures its own <video> (webcam/file); server-side and
+  // dataset-replay sources only have the backend's stats.input_fps.
+  const browserSource = s.source === "webcam" || s.source === "file";
+  const inputFps = browserSource ? s.metrics.cameraFps ?? r?.stats.input_fps ?? null : r?.stats.input_fps ?? null;
+  const inputFpsLabel = browserSource && s.metrics.cameraFps !== null && s.metrics.cameraFps !== undefined ? "camera fps" : "input fps";
+  const computeMs = r?.stats.compute_ms_mean ?? null;
+  const queueMs = r?.stats.queue_ms_mean ?? null;
 
   return (
     <div className="space-y-3">
       {/* performance header */}
       <div className="flex flex-wrap gap-2">
         <Metric label="status" value={s.status} warn={s.status === "error"} />
-        <Metric label="camera fps" value={fmt(s.metrics.cameraFps, 1)} />
+        <Metric label={inputFpsLabel} value={fmt(inputFps, 1)} />
         <Metric label="results fps" value={fmt(s.metrics.resultFps, 1)} />
         <Metric label="inference fps" value={fmt(r?.stats.inference_fps, 1)} />
         <Metric label="e2e latency" value={s.metrics.latencyMs ? `${s.metrics.latencyMs.toFixed(0)} ms` : "–"} warn={(s.metrics.latencyMs ?? 0) > 500} />
-        <Metric label="server proc" value={r ? `${r.processing_ms.toFixed(0)} ms` : "–"} />
+        <Metric label="server proc (e2e)" value={r ? `${r.processing_ms.toFixed(0)} ms` : "–"} />
+        <Metric label="compute (mean)" value={computeMs !== null ? `${computeMs.toFixed(0)} ms` : "–"} />
+        <Metric label="queue wait (mean)" value={queueMs !== null ? `${queueMs.toFixed(0)} ms` : "–"} warn={queueMs !== null && computeMs !== null && queueMs > computeMs} />
         <Metric label="resolution" value={s.metrics.resolution} />
         <Metric label="skipped busy / server drop" value={`${s.metrics.clientDropped}/${s.metrics.serverDropped}`} />
         <Metric label="device" value={health?.device.device ?? "–"} />
         <Metric label="forecaster" value={r?.stats.forecaster_active === "trained_model" ? "learned" : r?.stats.forecaster_active === "physics_baseline" ? "baseline" : "–"} />
         <Metric label="calibration" value={r?.camera_calibration.status ?? (calib ? "pending" : "none")} warn={!metric} />
       </div>
+      {resetNotice && <div className="rounded border border-warn/50 bg-warn/10 px-3 py-2 text-sm text-warn">⚠ {resetNotice}</div>}
       {s.error && <div className="rounded border border-bad/50 bg-bad/10 px-3 py-2 text-sm text-bad">{s.error}</div>}
       {s.source === "demo" && (
         <div className="rounded border border-accent/40 bg-accent/10 px-3 py-2 text-xs text-ink">
           DEMO MODE · dataset replay of human-annotated ETH/UCY positions ({s.demoInfo?.file}). The detector is bypassed and the image is a synthetic top-down rendering.
-          {s.demoInfo?.held_out_for_active_model ? " This scene was held out from the active model's training." : " Note: the active model was trained on this scene."}
+          {s.demoInfo?.held_out_for_active_model === true
+            ? " This scene was held out from the active model's training."
+            : s.demoInfo?.held_out_for_active_model === false
+              ? " Note: the active model was trained on this scene."
+              : " Whether the active model was trained on this scene is unknown."}
           {" "}White dotted lines show what actually happened next.
         </div>
       )}
@@ -178,7 +210,7 @@ export default function LiveConsole({ health }: { health: Health | null }) {
               </div>
             )}
             <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] text-dim">
-              <label>camera res
+              <label>camera res{s.source === "webcam" && running ? <span className="text-warn"> · applies on next start</span> : ""}
                 <select className="inp w-full" value={`${opts.camWidth}x${opts.camHeight}`} onChange={(e) => { const [w, h] = e.target.value.split("x").map(Number); setOpts({ ...opts, camWidth: w, camHeight: h }); }}>
                   {["640x480", "1280x720", "1920x1080"].map((x) => <option key={x}>{x}</option>)}
                 </select>
@@ -232,11 +264,17 @@ export default function LiveConsole({ health }: { health: Health | null }) {
             <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs">
               {(Object.keys(layers) as (keyof Layers)[]).map((k) => (
                 <label key={k} className="flex items-center gap-1">
-                  <input type="checkbox" checked={layers[k]} onChange={(e) => { setLayers({ ...layers, [k]: e.target.checked }); if (k === "pose") upd({ pose: e.target.checked }); }} />
-                  {{ pose: "skeleton", paths: "paths", cones: "uncertainty", trails: "trails", truth: "true future (replay)" }[k]}
+                  <input type="checkbox" checked={layers[k]} onChange={(e) => setLayers({ ...layers, [k]: e.target.checked })} />
+                  {{ pose: "skeleton overlay", paths: "paths", cones: "uncertainty", trails: "trails", truth: "true future (replay)" }[k]}
                 </label>
               ))}
             </div>
+            {/* Pose ESTIMATION (backend) is separate from skeleton DISPLAY (overlay layer above). */}
+            <label className="mt-1 flex items-center gap-1 text-xs" title="Runs the pose model on the backend. Needed for the upright/full-body check behind metric height; hiding the skeleton overlay does not turn it off.">
+              <input type="checkbox" checked={config.pose} onChange={(e) => upd({ pose: e.target.checked })} />
+              pose estimation
+            </label>
+            {!config.pose && <p className="text-[11px] text-warn">Pose estimation off: no skeletons, and metric height is unavailable (it needs pose keypoints).</p>}
             <div className="mt-2 grid grid-cols-2 gap-2">
               <button className="btn" onClick={openWizard}>Calibrate…</button>
               <button className="btn" disabled={!r} onClick={exportSession}>Export session</button>

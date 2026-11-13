@@ -72,7 +72,11 @@ export default function Diagnostics({ result, renderMs }: { result: FrameResult 
     <div className="space-y-1.5">
       <div className="flex justify-between text-[11px] text-dim">
         <span>frame #{result.frame_id} · {result.source}</span>
-        <span>stages {total.toFixed(1)} ms · end-to-end server {result.processing_ms.toFixed(1)} ms</span>
+        <span>
+          stages {total.toFixed(1)} ms · end-to-end server {result.processing_ms.toFixed(1)} ms
+          {result.stats.compute_ms_mean != null ? ` · compute ${result.stats.compute_ms_mean.toFixed(1)} ms` : ""}
+          {result.stats.queue_ms_mean != null ? ` · queue ${result.stats.queue_ms_mean.toFixed(1)} ms (means)` : ""}
+        </span>
       </div>
       {events.map((e) => (
         <Card key={e.stage} ev={e} hist={hist.current.get(e.stage) ?? []} />

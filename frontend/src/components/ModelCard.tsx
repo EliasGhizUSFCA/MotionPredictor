@@ -27,11 +27,19 @@ export default function ModelCard() {
           <li>
             Probability status:{" "}
             {d.forecaster?.probability_calibration_validated ? (
-              <span className="text-good">validated - held-out mode ECE {fmt(meta.calibration?.test_ece_all_modes, 3)} &lt; {d.forecaster?.ece_threshold}</span>
+              <span className="text-good">
+                checkpoint gate passed - held-out ECE all modes {fmt(meta.calibration?.test_ece_all_modes, 3)} &lt; {d.forecaster?.ece_threshold}, top mode{" "}
+                {fmt(meta.calibration?.test_ece_top_mode, 3)} &lt; {d.forecaster?.ece_top_mode_threshold ?? 0.1}
+              </span>
             ) : (
-              <span className="text-warn">not validated - shown as uncalibrated weights</span>
+              <span className="text-warn">
+                not validated - shown as uncalibrated weights
+                {(d.forecaster?.probability_gate?.reasons ?? []).length > 0 && <> ({d.forecaster.probability_gate.reasons.join("; ")})</>}
+              </span>
             )}
-            . Only applies in calibrated ground-plane (meter) mode; in image-pixel mode weights are always labelled uncalibrated.
+            . Held-out ECE: all modes {fmt(meta.calibration?.test_ece_all_modes, 3)}, top mode {fmt(meta.calibration?.test_ece_top_mode, 3)}. Even when the
+            checkpoint passes, probabilities are only labelled calibrated in ground-plane (meter) mode with a verified camera calibration (or the dataset
+            replay); in image-pixel mode weights are always labelled uncalibrated.
           </li>
           <li>Physics baseline: Kalman constant-velocity forecast, noise q = {fmt(meta.kalman_q, 3)} m²/s³ fitted on validation data; reports uncertainty bands, never route probabilities.</li>
         </ul>
@@ -49,7 +57,7 @@ export default function ModelCard() {
       <section className="rounded-lg border border-line bg-panel p-4 text-sm">
         <h2 className="mb-2 text-base text-ink">Leave-one-scene-out benchmark (meters, 4.8 s horizon)</h2>
         <table className="tbl">
-          <thead><tr><th>test scene</th><th>windows</th><th>CV ADE/FDE</th><th>Kalman ADE/FDE</th><th>MDN top-1</th><th>MDN min-of-5</th><th>mode ECE</th></tr></thead>
+          <thead><tr><th>test scene</th><th>windows</th><th>CV ADE/FDE</th><th>Kalman ADE/FDE</th><th>MDN top-1</th><th>MDN min-of-5</th><th>mode ECE (all modes)</th><th>90% cov. MDN</th></tr></thead>
           <tbody>
             {scenes.map((s) => {
               const b = bench[s];
@@ -57,7 +65,8 @@ export default function ModelCard() {
               return (
                 <tr key={s}>
                   <td>{s}</td><td>{b.n}</td><td>{p(b["cv_ade_fde_4.8"])}</td><td>{p(b["kalman_ade_fde_4.8"])}</td><td>{p(b["model_top1_ade_fde_4.8"])}</td><td>{p(b["model_min5_ade_fde_4.8"])}</td>
-                  <td className={b.ece_cal < 0.05 ? "text-good" : "text-warn"}>{fmt(b.ece_cal, 3)}</td>
+                  <td className={b.ece_cal < 0.05 ? "text-good" : "text-warn"}>{fmt(b.ece_cal, 4)}</td>
+                  <td className={b["hdr90_4.8s_model"] >= 0.85 ? "" : "text-warn"}>{fmt(b["hdr90_4.8s_model"], 2)}</td>
                 </tr>
               );
             })}
@@ -65,8 +74,10 @@ export default function ModelCard() {
         </table>
         <p className="mt-2 text-[11px] text-dim">
           Honest reading: the learned model&apos;s single most-likely path is about as accurate as constant velocity (a strong, well-known baseline on these datasets);
-          its value is in the multiple hypotheses (min-of-5 is ~35% lower) and in calibrated uncertainty. ETH is out-of-distribution for the other scenes and its
-          probabilities are not well calibrated.
+          its value is in the multiple hypotheses (min-of-5 is ~35% lower) and in better density estimates (lower NLL). Its uncertainty regions are reasonably
+          calibrated on ZARA/HOTEL but overconfident on UNIV (crowded) and ETH (out of distribution): see the 90% coverage column. The probability gate needs
+          held-out all-modes ECE &lt; 0.05 and top-mode ECE &lt; 0.10; only the zara2 fold passes. ETH (0.102; also top mode 0.168) and UNIV (0.0501) fail on all-modes ECE, HOTEL (0.102)
+          and ZARA1 (0.190) fail on top-mode ECE, so their mode values are shown as uncalibrated weights.
         </p>
         <h3 className="mt-3 text-sm text-ink">Limitations</h3>
         <ul className="list-disc pl-5 text-[11px] text-dim">

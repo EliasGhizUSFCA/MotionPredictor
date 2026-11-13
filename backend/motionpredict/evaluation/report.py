@@ -14,7 +14,8 @@ from pathlib import Path
 
 import numpy as np
 
-METRICS = ["ade_top1", "fde_top1", "min_ade", "min_fde", "w_ade", "nll_final"]
+METRICS = ["ade_top1", "fde_top1", "min_ade", "min_fde", "w_ade", "w_fde", "nll_final"]
+BH_METRICS = ["ade_top1_bh", "fde_top1_bh", "min_ade_bh", "min_fde_bh", "w_ade_bh", "w_fde_bh"]
 
 
 def load_predictions(run_dir: Path) -> list[dict]:
@@ -39,8 +40,8 @@ def rows_from_predictions(preds: list[dict]) -> list[dict]:
                      "calibration_status": mo["calibration_status"], "latency_ms": mo["latency_ms"]}
                 if ev["included"]:
                     s = ev["scores"][m]
-                    r.update({k: s.get(k) for k in METRICS + ["ade_top1_bh", "fde_top1_bh", "min_ade_bh", "min_fde_bh",
-                                                             "miss_top1", "miss_k", "in_hdr50", "in_hdr90", "top_id", "top_prob", "best_id", "k"]})
+                    r.update({k: s.get(k) for k in METRICS + BH_METRICS + ["miss_top1", "miss_k", "in_hdr50", "in_hdr90", "top_id",
+                                                                         "top_prob", "best_id", "k"]})
                     r["mode_probs"] = s.get("mode_probs")
                 rows.append(r)
     return rows
@@ -51,7 +52,8 @@ def _stats(v: list[float]) -> dict | None:
     if not v:
         return None
     a = np.asarray(v)
-    return {"mean": float(a.mean()), "median": float(np.median(a)), "p90": float(np.percentile(a, 90)), "n": len(a)}
+    med = float(np.median(a))
+    return {"mean": float(a.mean()), "median": med, "p50": med, "p90": float(np.percentile(a, 90)), "n": len(a)}
 
 
 def _bootstrap_diff(a: np.ndarray, b: np.ndarray, n: int = 1000, seed: int = 0) -> dict:
@@ -141,6 +143,14 @@ def summarise(run_dir: Path) -> dict:
     horizons = meta["eval_config"]["horizons"]
     flags = json.loads((run_dir / "flags.json").read_text()) if (run_dir / "flags.json").exists() else []
     flagged_tracks = {f["track_id"] for f in flags if f.get("kind") == "inaccurate_track" and f.get("track_id") is not None}
+    # reviewer-flagged inaccurate tracks are removed once, before EVERY aggregate below
+    n_flagged_rows = Counter(r["horizon"] for r in rows if r["track_id"] in flagged_tracks and r["model"] == models[0])
+    all_rows = rows  # the CSV export keeps every row (flagged ones included) for inspection
+    rows = [r for r in rows if r["track_id"] not in flagged_tracks]
+    preds = [p for p in preds if p["track_id"] not in flagged_tracks]
+    ff = meta.get("forecast_failures") or {}
+    n_elig = ff.get("n_eligible") or 0
+    fail_by_model = ff.get("by_model") or {}
 
     excl = defaultdict(Counter)
     per = {}
@@ -150,14 +160,20 @@ def summarise(run_dir: Path) -> dict:
         for r in hr:
             for reason in filter(None, r["exclusion_reasons"].split(";")):
                 excl[str(h)][reason] += 1
+        if ff.get("count"):
+            excl[str(h)]["forecast_failed"] = ff["count"]  # eligible tracks with no forecast from some model (no sample)
+        if n_flagged_rows.get(h):
+            excl[str(h)]["flagged_inaccurate_track"] = n_flagged_rows[h]
         for m in models:
-            mr = [r for r in rows if r["horizon"] == h and r["model"] == m and r["included"] and r["track_id"] not in flagged_tracks]
+            mr = [r for r in rows if r["horizon"] == h and r["model"] == m and r["included"]]
             d = {"n": len(mr)}
             for k in METRICS:
                 d[k] = _stats([r.get(k) for r in mr])
             if coord == "image_pixels":
-                for k in ("ade_top1_bh", "fde_top1_bh", "min_ade_bh", "min_fde_bh"):
+                for k in BH_METRICS:
                     d[k] = _stats([r.get(k) for r in mr])
+            # share of eligible (confirmed, detected) tracks at prediction times this model failed to forecast
+            d["forecast_failure_rate"] = (fail_by_model.get(m, 0) / n_elig) if n_elig else None
             if mr:
                 d["miss_rate_top1"] = float(np.mean([r["miss_top1"] for r in mr]))
                 d["miss_rate_k"] = float(np.mean([r["miss_k"] for r in mr]))
@@ -207,6 +223,9 @@ def summarise(run_dir: Path) -> dict:
         "n_predictions": len(preds),
         "inclusion": {h: dict(c) for h, c in excl.items()},
         "flagged_tracks_excluded": sorted(flagged_tracks),
+        "forecast_failures": {"count": int(ff.get("count", 0)), "by_reason": dict(ff.get("by_reason") or {}),
+                              "by_model": dict(fail_by_model), "n_eligible": int(n_elig)},
+        "scene_in_active_model_training": (meta.get("source") or {}).get("scene_in_active_model_training"),
         "per_model_horizon": per,
         "paired_comparison": paired,
         "per_track": [{"model": m, "track_id": t, "n": len(v), "mean_fde": float(np.mean(v))} for (m, t), v in by_track.items()],
@@ -220,22 +239,24 @@ def summarise(run_dir: Path) -> dict:
             "ade_top1": "mean distance of the highest-probability (or only) path to the actual path",
             "fde_top1": "distance at the horizon for the highest-probability path",
             "min_ade/min_fde": "best of K hypotheses chosen with hindsight (oracle) - not a model choice",
-            "w_ade": "probability-weighted ADE (learned model only)",
+            "w_ade/w_fde": "probability-weighted ADE / FDE (learned model only)",
+            "forecast_failure_rate": "eligible tracks (confirmed and detected at the prediction time) for which this model "
+                                     "returned no forecast or raised; such tracks yield no sample for any model",
             "miss_rate": f"FDE > {'2.0 m' if unit == 'm' else '1 body height'}",
             "nll_final": "negative log-likelihood of the actual final position (lower is better; same coordinate system only)",
             "coverage50/90": "fraction of actual final positions inside the 50%/90% predicted region",
         },
     }
     (run_dir / "summary.json").write_text(json.dumps(summary, indent=1))
-    write_csv(run_dir, rows)
+    write_csv(run_dir, all_rows)
     (run_dir / "report.html").write_text(render_report(meta, summary, preds))
     return summary
 
 
 def write_csv(run_dir: Path, rows: list[dict]) -> None:
     cols = ["prediction_id", "track_id", "object_class", "t", "horizon", "model", "model_version", "coord", "included",
-            "exclusion_reasons", "ade_top1", "fde_top1", "min_ade", "min_fde", "w_ade", "ade_top1_bh", "fde_top1_bh", "min_ade_bh",
-            "min_fde_bh", "miss_top1", "miss_k", "nll_final", "in_hdr50", "in_hdr90", "top_id", "top_prob", "best_id", "k",
+            "exclusion_reasons", "ade_top1", "fde_top1", "min_ade", "min_fde", "w_ade", "w_fde", "ade_top1_bh", "fde_top1_bh", "min_ade_bh",
+            "min_fde_bh", "w_ade_bh", "w_fde_bh", "miss_top1", "miss_k", "nll_final", "in_hdr50", "in_hdr90", "top_id", "top_prob", "best_id", "k",
             "probability_type", "calibration_status", "latency_ms", "tracker_confidence", "history_steps", "start_x", "start_y", "body_px"]
     buf = io.StringIO()
     w = csv.DictWriter(buf, fieldnames=cols, extrasaction="ignore")
@@ -284,12 +305,14 @@ def render_report(meta: dict, s: dict, preds: list[dict]) -> str:
     rows = []
     for key, d in s["per_model_horizon"].items():
         m, h = key.split("@")
-        g = lambda k: (f"{d[k]['mean']:.3f} / {d[k]['median']:.3f}" if d.get(k) else "–")  # noqa: E731
+        g = lambda k: (f"{d[k]['mean']:.3f} / {d[k]['median']:.3f} / {d[k]['p90']:.3f}" if d.get(k) else "–")  # noqa: E731
+        fr = d.get("forecast_failure_rate")
         rows.append(f"<tr><td>{e(m)}</td><td>{h}s</td><td>{d['n']}</td><td>{g('ade_top1' + sfx)}</td><td>{g('fde_top1' + sfx)}</td>"
-                    f"<td>{g('min_ade' + sfx)}</td><td>{g('min_fde' + sfx)}</td><td>{d.get('miss_rate_top1', float('nan')):.2f}</td>"
+                    f"<td>{g('min_ade' + sfx)}</td><td>{g('min_fde' + sfx)}</td><td>{g('w_ade' + sfx)}</td><td>{g('w_fde' + sfx)}</td>"
+                    f"<td>{d.get('miss_rate_top1', float('nan')):.2f}</td>"
                     f"<td>{d.get('coverage50', float('nan')):.2f} / {d.get('coverage90', float('nan')):.2f}</td>"
                     f"<td>{g('nll_final')}</td><td>{d.get('latency_ms', float('nan')):.2f}</td>"
-                    f"<td>{e(str(d.get('probability_type', '')))}</td></tr>")
+                    f"<td>{'–' if fr is None else f'{fr:.3f}'}</td><td>{e(str(d.get('probability_type', '')))}</td></tr>")
     paired = "".join(f"<tr><td>{h}s</td><td>{v['ade_top1']['mean_diff']:.3f} [{v['ade_top1']['ci95'][0]:.3f}, {v['ade_top1']['ci95'][1]:.3f}]</td>"
                      f"<td>{v['fde_top1']['mean_diff']:.3f} [{v['fde_top1']['ci95'][0]:.3f}, {v['fde_top1']['ci95'][1]:.3f}]</td><td>{v['ade_top1']['n_pairs']}</td></tr>"
                      for h, v in s["paired_comparison"].items())
@@ -313,6 +336,33 @@ def render_report(meta: dict, s: dict, preds: list[dict]) -> str:
         ex += "</div>"
     import torch
 
+    src = meta.get("source") or {}
+    is_scene = src.get("type") == "dataset_scene"
+    limits = []
+    if is_scene:
+        limits.append("Ground truth is human-annotated ETH/UCY positions (not tracker output); the input frames are a "
+                      "synthetic replay of those annotations, so detection and tracking are idealised compared with real video.")
+    else:
+        limits.append("Ground truth from the tracker inherits detection noise, occlusion gaps and ID switches (pseudo ground truth).")
+    limits.append(f"Quality gates: <code>{e(json.dumps(meta['eval_config']['quality_rules']))}</code>; a quality event only "
+                  "excludes horizons whose ground truth it affects.")
+    if s["coordinate_system"] == "ground_plane_meters":
+        limits.append("Errors are in ground-plane meters via " + ("the dataset's homography." if is_scene else
+                      "the user-supplied camera calibration; calibration error adds to forecast error, especially far from the reference points."))
+    else:
+        limits.append("Uncalibrated video: errors are in image pixels, distorted by perspective; body-height normalisation reduces but does not remove this.")
+    limits.append("The learned model was trained on pedestrian data (ETH/UCY); other motion (e.g. sports) is out of distribution.")
+    limits_html = "".join(f"<li>{x}</li>" for x in limits)
+    train_warn = ""
+    if src.get("scene_in_active_model_training"):
+        train_warn = (f"<div class=warn><b>Warning:</b> scene <code>{e(str(src.get('scene')))}</code> was part of the learned model's "
+                      "training data; its results here are optimistic and are not a held-out evaluation.</div>")
+    elif is_scene and src.get("scene_in_active_model_training") is None and "learned" in s["models"]:
+        train_warn = "<div class=warn>It is unknown whether this scene was in the learned model's training data.</div>"
+    ff = s.get("forecast_failures") or {}
+    fail_html = (f"<p>Forecast failures (eligible tracks with no forecast from some model; no sample for any model): "
+                 f"{ff.get('count', 0)} of {ff.get('n_eligible', 0)} - {e(json.dumps(ff.get('by_reason', {})))}</p>")
+
     return f"""<!doctype html><html><head><meta charset=utf-8><title>MotionPredict evaluation {e(s['run_id'])}</title>
 <style>body{{background:#0b0f14;color:#d6dde6;font:14px/1.5 system-ui,sans-serif;max-width:1100px;margin:24px auto;padding:0 16px}}
 h1,h2,h3{{color:#fff}}table{{border-collapse:collapse;margin:8px 0 16px;width:100%}}td,th{{border:1px solid #273142;padding:4px 8px;text-align:left}}
@@ -324,16 +374,17 @@ figure{{margin:0}}figcaption{{font-size:12px;color:#94a3b8}}code{{color:#93c5fd}
 {"Pixel errors are also normalised by the person's bounding-box height (body heights) so near and far people are comparable; they are not metric." if s['normalised_unit'] else ""}
 Best-of-K (minADE/minFDE) uses hindsight to pick the closest hypothesis and does not mean the model selected it in advance.
 Forecasts are estimates; this system is not suitable for safety-critical use.</div>
+{train_warn}
 <h2>Video / data</h2><pre>{e(json.dumps(meta.get('video', {}), indent=1))}</pre>
 <p>Tags: {e(json.dumps(meta.get('tags', {})))}</p>
 <h2>Configuration</h2><pre>{e(json.dumps({'eval': meta['eval_config'], 'models': meta['models'], 'detector': meta['detector']}, indent=1))}</pre>
-<h2>Sample counts and exclusions</h2><table><tr><th>horizon</th><th>counts</th></tr>{incl}</table>
-<h2>Accuracy (mean / median){e(nu)}</h2>
-<table><tr><th>model</th><th>horizon</th><th>n</th><th>ADE top-1</th><th>FDE top-1</th><th>minADE@K</th><th>minFDE@K</th><th>miss rate</th><th>coverage 50/90%</th><th>NLL final</th><th>latency ms</th><th>probabilities</th></tr>{''.join(rows)}</table>
+<h2>Sample counts and exclusions</h2><table><tr><th>horizon</th><th>counts</th></tr>{incl}</table>{fail_html}
+{f"<p>Excluded as inaccurate tracks (from every statistic): {e(', '.join(f'#{t}' for t in s['flagged_tracks_excluded']))}</p>" if s.get('flagged_tracks_excluded') else ""}
+<h2>Accuracy (mean / median / p90){e(nu)}</h2>
+<table><tr><th>model</th><th>horizon</th><th>n</th><th>ADE top-1</th><th>FDE top-1</th><th>minADE@K</th><th>minFDE@K</th><th>wADE</th><th>wFDE</th><th>miss rate</th><th>coverage 50/90%</th><th>NLL final</th><th>latency ms</th><th>failure rate</th><th>probabilities</th></tr>{''.join(rows)}</table>
 <h2>Paired comparison on identical samples (bootstrap 95% CI)</h2><table><tr><th>horizon</th><th>ΔADE</th><th>ΔFDE</th><th>pairs</th></tr>{paired}</table>
 <h2>Calibration diagnostics</h2>{rel or "<p>No probabilistic mode outputs in this run.</p>"}
 <h2>Examples</h2><p>Dashed: predicted (green = highest probability, yellow, red). Blue: actual. White: start.</p>{ex}
-<h2>Tracking limitations</h2><ul><li>Ground truth from the tracker inherits detection noise, occlusion gaps and ID switches; quality gates: <code>{e(json.dumps(meta['eval_config']['quality_rules']))}</code>.</li>
-<li>Uncalibrated video: errors are in image pixels, distorted by perspective.</li><li>The learned model was trained on pedestrian data (ETH/UCY); other motion (e.g. sports) is out of distribution.</li></ul>
+<h2>Limitations</h2><ul>{limits_html}</ul>
 <h2>Reproducibility</h2><pre>{e(json.dumps({'git': _git_rev(), 'python': platform.python_version(), 'torch': torch.__version__, 'source_sha256': meta['source'].get('sha256'), 'pipeline_config': meta['pipeline_config']}, indent=1))}</pre>
 </body></html>"""

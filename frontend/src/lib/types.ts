@@ -128,6 +128,8 @@ export interface FrameResult {
     input_fps: number | null;
     inference_fps: number | null;
     mean_processing_ms: number;
+    compute_ms_mean?: number | null; // worker start -> done (excludes queue wait); inference_fps = 1000 / compute_ms_mean
+    queue_ms_mean?: number | null; // receipt -> worker start
     device: string;
     forecaster_active: PredictionSource | null;
   };
@@ -181,7 +183,9 @@ export interface Health {
     load_error: string | null;
     version: string | null;
     probability_calibration_validated: boolean;
+    probability_gate?: { passed: boolean; reasons: string[]; test_ece_all_modes: number | null; test_ece_top_mode: number | null; requires: string };
     ece_threshold: number;
+    ece_top_mode_threshold?: number;
     meta: Record<string, any>;
   } | null;
   llm: { configured: boolean; model: string };
@@ -210,6 +214,9 @@ export interface EvalScore {
   min_ade_bh?: number;
   min_fde_bh?: number;
   w_ade: number | null;
+  w_fde?: number | null;
+  w_ade_bh?: number | null;
+  w_fde_bh?: number | null;
   miss_top1: boolean;
   miss_k: boolean;
   nll_final: number;
@@ -249,6 +256,7 @@ export interface EvalPrediction {
 export interface Stat {
   mean: number;
   median: number;
+  p50?: number;
   p90: number;
   n: number;
 }
@@ -260,11 +268,15 @@ export interface ModelHorizonSummary {
   min_ade: Stat | null;
   min_fde: Stat | null;
   w_ade: Stat | null;
+  w_fde?: Stat | null;
   nll_final: Stat | null;
   ade_top1_bh?: Stat | null;
   fde_top1_bh?: Stat | null;
   min_ade_bh?: Stat | null;
   min_fde_bh?: Stat | null;
+  w_ade_bh?: Stat | null;
+  w_fde_bh?: Stat | null;
+  forecast_failure_rate?: number | null;
   miss_rate_top1?: number;
   miss_rate_k?: number;
   coverage50?: number;
@@ -285,8 +297,10 @@ export interface EvalSummary {
   models: string[];
   horizons: number[];
   n_predictions: number;
-  inclusion: Record<string, Record<string, number>>;
-  flagged_tracks_excluded: number[];
+  inclusion: Record<string, Record<string, number>>; // per horizon key; may include "forecast_failed", "flagged_inaccurate_track"
+  flagged_tracks_excluded: number[]; // excluded from EVERY aggregate
+  forecast_failures?: { count: number; by_reason: Record<string, number>; by_model?: Record<string, number>; n_eligible?: number };
+  scene_in_active_model_training?: boolean | null; // dataset runs; null for video / unknown
   per_model_horizon: Record<string, ModelHorizonSummary>;
   paired_comparison: Record<string, { comparison: string; unit: string; ade_top1: { mean_diff: number; ci95: [number, number]; n_pairs: number }; fde_top1: { mean_diff: number; ci95: [number, number]; n_pairs: number } }>;
   per_track: { model: string; track_id: number; n: number; mean_fde: number }[];
@@ -311,4 +325,53 @@ export interface EvalRunInfo {
   error: string | null;
   meta: Record<string, any> | null;
   request: Record<string, any>;
+}
+
+export interface EvalFlag {
+  kind: "hard_case" | "inaccurate_track" | "annotation_correction";
+  prediction_id: string | null;
+  track_id: number | null;
+  note: string;
+  corrected_future: [number, number, number][] | null; // [t_rel, x, y] in the run coordinate system
+  created: string;
+}
+
+// GET /api/eval/compare?runs=a,b - every distance in a run row uses that row's `unit`.
+export interface EvalCompareRow {
+  n: number;
+  ade_top1: Stat | null;
+  fde_top1: Stat | null;
+  min_ade: Stat | null;
+  min_fde: Stat | null;
+  miss_rate_top1: number | null;
+  coverage90: number | null;
+  coverage50?: number | null;
+  latency_ms?: number | null;
+  reliability_ece?: number | null;
+}
+
+export interface EvalCompareRun {
+  run_id: string;
+  tags: { sport?: string | null; camera_perspective?: string | null; notes?: string | null } | null;
+  models: Record<string, any> | null;
+  coordinate_system: CoordinateSystem;
+  unit: "m" | "body heights";
+  source: Record<string, any> | null;
+  per_model_horizon: Record<string, EvalCompareRow>;
+}
+
+export interface EvalComparePaired {
+  run_a: string;
+  run_b: string;
+  model: string;
+  horizon: string;
+  n_pairs: number;
+  unit?: string;
+  comparison?: string;
+  fde_top1: { mean_diff: number; ci95: [number, number] };
+}
+
+export interface EvalCompare {
+  runs: EvalCompareRun[];
+  paired: EvalComparePaired[];
 }

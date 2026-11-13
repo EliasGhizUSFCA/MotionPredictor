@@ -10,7 +10,7 @@ Definitions (per forecast, per horizon h, evaluation times on the forecast's 0.2
   (what a user would act on). For the physics baseline this is the CV path.
 * minADE@K / minFDE@K  - error of the best of K hypotheses chosen *with hindsight*
   (oracle). Reported separately; it does not mean the model picked that path in advance.
-* wADE                 - probability-weighted ADE  sum_k p_k ADE_k (only with probabilities).
+* wADE / wFDE          - probability-weighted ADE / FDE  sum_k p_k ADE_k (only with probabilities).
 * miss_top1 / miss@K   - FDE_top1 > threshold / minFDE@K > threshold.
 * NLL_final            - negative log density of the true final position under the
   predicted (mixture of) Gaussian(s) at h. Lower is better; comparable across models only
@@ -82,6 +82,7 @@ def score_forecast(
         "min_fde": float(finals.min()),
         "k": len(trajs),
         "w_ade": float(np.dot(pi, errs)) if has_p else None,
+        "w_fde": float(np.dot(pi, finals)) if has_p else None,
         "miss_top1": bool(finals[top] > thr),
         "miss_k": bool(finals.min() > thr),
         "nll_final": float(-lp),
@@ -94,6 +95,6 @@ def score_forecast(
         "miss_threshold": thr,
     }
     if coord == "image_pixels":
-        for k in ("ade_top1", "fde_top1", "min_ade", "min_fde"):
-            out[k + "_bh"] = out[k] / norm
+        for k in ("ade_top1", "fde_top1", "min_ade", "min_fde", "w_ade", "w_fde"):
+            out[k + "_bh"] = None if out[k] is None else out[k] / norm
     return out

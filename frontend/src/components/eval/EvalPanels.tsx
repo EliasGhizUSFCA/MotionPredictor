@@ -4,7 +4,7 @@ import {
   Bar, BarChart, CartesianGrid, ComposedChart, Legend, Line, LineChart, ReferenceLine, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis,
 } from "recharts";
 import { getJSON, postJSON } from "@/lib/api";
-import type { EvalPrediction, ModelHorizonSummary } from "@/lib/types";
+import type { EvalCompare, EvalCompareRun, EvalFlag, EvalPrediction, EvalRunInfo, ModelHorizonSummary } from "@/lib/types";
 import { fmt, hk } from "@/lib/viz";
 import type { RunData } from "./EvalTab";
 
@@ -50,7 +50,7 @@ export function ComparisonPanel({ data, onJump, onRerun }: { data: RunData; onJu
   const [ckpts, setCkpts] = useState<{ checkpoint: string; active: boolean }[]>([]);
   const [ck, setCk] = useState("");
   const [others, setOthers] = useState<string>("");
-  const [cmp, setCmp] = useState<any[] | null>(null);
+  const [cmp, setCmp] = useState<EvalCompare | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   useEffect(() => {
     getJSON<{ checkpoints: { checkpoint: string; active: boolean }[] }>("/api/models").then((r) => setCkpts(r.checkpoints)).catch(() => {});
@@ -73,7 +73,7 @@ export function ComparisonPanel({ data, onJump, onRerun }: { data: RunData; onJu
         <div className="grid gap-3 lg:grid-cols-2">
           {(["ade", "fde"] as const).map((m) => (
             <div key={m} className="h-56">
-              <p className="text-[11px] text-dim">{m === "ade" ? "ADE" : "FDE"} of the highest-probability path (mean, {k.unit}) - lower is better</p>
+              <p className="text-[11px] text-dim">{m === "ade" ? "ADE" : "FDE"} of the top-ranked path (mean, {k.unit}) - lower is better</p>
               <ResponsiveContainer>
                 <BarChart data={byH}>
                   <CartesianGrid stroke="#16202c" />
@@ -92,7 +92,7 @@ export function ComparisonPanel({ data, onJump, onRerun }: { data: RunData; onJu
             <thead>
               <tr>
                 <th>model</th><th>horizon</th><th>n</th><th>ADE top-1 mean / median / p90</th><th>FDE top-1 mean / median / p90</th>
-                <th>minADE@K / minFDE@K*</th><th>wADE</th><th>miss rate top-1 / @K</th><th>coverage 50% / 90%</th><th>NLL (final)</th><th>latency ms</th><th>probabilities</th>
+                <th>minADE@K / minFDE@K*</th><th>wADE / wFDE†</th><th>miss rate top-1 / @K</th><th>coverage 50% / 90%</th><th>NLL (final)</th><th>latency ms</th><th>probabilities</th>
               </tr>
             </thead>
             <tbody>
@@ -111,7 +111,7 @@ export function ComparisonPanel({ data, onJump, onRerun }: { data: RunData; onJu
                       <td className="font-mono">{s3("ade_top1" + k.sfx)}</td>
                       <td className="font-mono">{s3("fde_top1" + k.sfx)}</td>
                       <td className="font-mono">{fmt(stat(d, "min_ade" + k.sfx)?.mean)} / {fmt(stat(d, "min_fde" + k.sfx)?.mean)} (K={d?.k ?? "–"})</td>
-                      <td className="font-mono">{k.sfx ? "–" : fmt(stat(d, "w_ade")?.mean)}</td>
+                      <td className="font-mono">{fmt(stat(d, "w_ade" + k.sfx)?.mean)} / {fmt(stat(d, "w_fde" + k.sfx)?.mean)}</td>
                       <td className="font-mono">{fmt(d?.miss_rate_top1)} / {fmt(d?.miss_rate_k)}</td>
                       <td className="font-mono">{fmt(d?.coverage50)} / {fmt(d?.coverage90)}</td>
                       <td className="font-mono">{fmt(stat(d, "nll_final")?.median)}</td>
@@ -127,6 +127,8 @@ export function ComparisonPanel({ data, onJump, onRerun }: { data: RunData; onJu
             *Best-of-K uses hindsight to pick the closest hypothesis; it measures whether the right path was among the candidates, not whether the model chose it.
             Miss = final error above {k.px ? "1 body height" : "2 m"}. Coverage should match its nominal level (0.50 / 0.90) for well-calibrated uncertainty.
             NLL shown as median of the final-position negative log-likelihood ({summary.coordinate_system}).
+            †Probability-weighted ADE / FDE: errors of all hypotheses weighted by the model&apos;s mode weights (learned model only; the weights are
+            {summary.models.some((m) => summary.per_model_horizon[`${m}@${hk(summary.selected_horizon_for_rankings)}`]?.probability_type === "calibrated_probability") ? " validated probabilities" : " uncalibrated"} here).
           </p>
         </div>
       </Panel>
@@ -176,7 +178,7 @@ export function ComparisonPanel({ data, onJump, onRerun }: { data: RunData; onJu
           </label>
           <button className="btn" onClick={async () => {
             try {
-              setCmp((await getJSON<{ runs: any[] }>(`/api/eval/compare?runs=${encodeURIComponent([summary.run_id, ...others.split(",").map((s) => s.trim()).filter(Boolean)].join(","))}`)).runs);
+              setCmp(await getJSON<EvalCompare>(`/api/eval/compare?runs=${encodeURIComponent([summary.run_id, ...others.split(",").map((s) => s.trim()).filter(Boolean)].join(","))}`));
             } catch (e: any) {
               setMsg(String(e.message ?? e));
             }
@@ -184,38 +186,84 @@ export function ComparisonPanel({ data, onJump, onRerun }: { data: RunData; onJu
         </div>
         {msg && <p className="mt-1 text-xs text-bad">{msg}</p>}
         <p className="mt-1 text-[11px] text-dim">Re-runs keep the same source, frames and configuration; only the forecasting checkpoint changes. Note which scenes each checkpoint was trained on - a checkpoint evaluated on its own training scene is not an independent test.</p>
-        {cmp && (
-          <table className="tbl mt-2">
-            <thead><tr><th>run</th><th>tags</th><th>learned version</th><th>coords</th><th>model@h</th><th>n</th><th>FDE top-1</th><th>minFDE</th><th>miss</th><th>cov90</th></tr></thead>
-            <tbody>
-              {cmp.flatMap((r) =>
-                Object.entries(r.per_model_horizon).map(([key, v]: [string, any]) => (
-                  <tr key={r.run_id + key}>
-                    <td className="font-mono">{r.run_id}</td>
-                    <td>{[r.tags?.sport, r.tags?.camera_perspective].filter(Boolean).join(" · ") || "–"}</td>
-                    <td>{r.models?.learned?.version ?? "–"}</td>
-                    <td>{r.coordinate_system}</td>
-                    <td>{key}</td>
-                    <td>{v.n}</td>
-                    <td className="font-mono">{fmt((v.fde_top1_bh ?? v.fde_top1)?.mean)}{v.fde_top1_bh ? " bh" : ""}</td>
-                    <td className="font-mono">{fmt(v.min_fde?.mean)}</td>
-                    <td className="font-mono">{fmt(v.miss_rate_top1)}</td>
-                    <td className="font-mono">{fmt(v.coverage90)}</td>
-                  </tr>
-                )),
-              )}
-            </tbody>
-          </table>
-        )}
+        {cmp && <CompareTables cmp={cmp} />}
       </Panel>
     </div>
   );
 }
 
+function CompareTables({ cmp }: { cmp: EvalCompare }) {
+  // every distance in a run row is in that row's own unit (m or body heights); rows are grouped by unit and never mixed
+  const units = Array.from(new Set(cmp.runs.map((r) => r.unit)));
+  const s3 = (v: { mean: number; median: number; p90: number } | null | undefined) => (v ? `${fmt(v.mean)} / ${fmt(v.p90)}` : "–");
+  return (
+    <div className="mt-2 space-y-2">
+      {units.length > 1 && (
+        <p className="text-[11px] text-warn">These runs use different units ({units.join(", ")}). Distances are only comparable within one unit group; rows are grouped below.</p>
+      )}
+      {units.map((u) => (
+        <div key={u} className="overflow-auto">
+          <p className="text-[11px] text-dim">Unit: <b>{u}</b> (all distances in this table; mean / p90)</p>
+          <table className="tbl">
+            <thead><tr><th>run</th><th>tags</th><th>learned version</th><th>coords</th><th>model@h</th><th>n</th><th>ADE top-1</th><th>FDE top-1</th><th>minADE*</th><th>minFDE*</th><th>miss</th><th>cov 50 / 90</th><th>ECE</th><th>latency ms</th></tr></thead>
+            <tbody>
+              {cmp.runs.filter((r) => r.unit === u).flatMap((r) =>
+                Object.entries(r.per_model_horizon).map(([key, v]) => (
+                  <tr key={r.run_id + key}>
+                    <td className="font-mono">{r.run_id}{r.source?.scene_in_active_model_training ? <span className="ml-1 text-[10px] text-warn">in-sample</span> : null}</td>
+                    <td>{[r.tags?.sport, r.tags?.camera_perspective].filter(Boolean).join(" · ") || "–"}</td>
+                    <td>{r.models?.learned?.version ?? "–"}</td>
+                    <td>{r.coordinate_system}</td>
+                    <td>{key}</td>
+                    <td>{v.n}</td>
+                    <td className="font-mono">{s3(v.ade_top1)}</td>
+                    <td className="font-mono">{s3(v.fde_top1)}</td>
+                    <td className="font-mono">{fmt(v.min_ade?.mean)}</td>
+                    <td className="font-mono">{fmt(v.min_fde?.mean)}</td>
+                    <td className="font-mono">{fmt(v.miss_rate_top1)}</td>
+                    <td className="font-mono">{fmt(v.coverage50)} / {fmt(v.coverage90)}</td>
+                    <td className="font-mono">{fmt(v.reliability_ece, 3)}</td>
+                    <td className="font-mono">{fmt(v.latency_ms)}</td>
+                  </tr>
+                )),
+              )}
+            </tbody>
+          </table>
+        </div>
+      ))}
+      <p className="text-[11px] text-dim">*Best-of-K with hindsight. Runs marked in-sample were evaluated on a scene the active learned model was trained on.</p>
+      {cmp.paired.length > 0 ? (
+        <div className="overflow-auto">
+          <p className="text-[11px] text-dim">Paired FDE top-1 difference on identical samples (same source and configuration, matched by track and time; run B − run A, bootstrap 95% CI)</p>
+          <table className="tbl">
+            <thead><tr><th>run A</th><th>run B</th><th>model</th><th>horizon</th><th>pairs</th><th>Δ FDE top-1</th><th>verdict</th></tr></thead>
+            <tbody>
+              {cmp.paired.map((p) => {
+                const ci = p.fde_top1.ci95;
+                return (
+                  <tr key={`${p.run_a}${p.run_b}${p.model}${p.horizon}`}>
+                    <td className="font-mono">{p.run_a}</td><td className="font-mono">{p.run_b}</td><td>{MNAME[p.model] ?? p.model}</td><td>{p.horizon}s</td><td>{p.n_pairs}</td>
+                    <td className="font-mono">{fmt(p.fde_top1.mean_diff, 3)} [{fmt(ci[0], 3)}, {fmt(ci[1], 3)}] {p.unit ?? ""}</td>
+                    <td>{ci[1] < 0 ? "run B better (CI excludes 0)" : ci[0] > 0 ? "run A better (CI excludes 0)" : "no significant difference"}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        cmp.runs.length > 1 && <p className="text-[11px] text-dim">No paired comparison: paired differences need runs of the same source (SHA-256 / scene) with the same configuration.</p>
+      )}
+    </div>
+  );
+}
+
 // ------------------------------------------------------------------- analytics
-function rowsFor(preds: EvalPrediction[], h: number, model: string, sfx: string) {
+function rowsFor(preds: EvalPrediction[], h: number, model: string, sfx: string, flagged: number[]) {
   const out: { t: number; id: string; track: number; ade: number; fde: number; min_fde: number }[] = [];
+  const bad = new Set(flagged);
   for (const p of preds) {
+    if (bad.has(p.track_id)) continue; // reviewer-flagged inaccurate tracks are excluded from every aggregate (as in summary.json)
     const ev = p.evaluations[hk(h)];
     const s = ev?.included ? ev.scores?.[model] : undefined;
     if (!s) continue;
@@ -230,7 +278,7 @@ export function AnalyticsPanel({ data, onJump }: { data: RunData; onJump: (id: s
   const [h, setH] = useState(summary.selected_horizon_for_rankings);
   const [metricKey, setMetricKey] = useState<"ade" | "fde">("fde");
 
-  const series = useMemo(() => Object.fromEntries(summary.models.map((m) => [m, rowsFor(predictions, h, m, k.sfx)])), [summary.models, predictions, h, k.sfx]);
+  const series = useMemo(() => Object.fromEntries(summary.models.map((m) => [m, rowsFor(predictions, h, m, k.sfx, summary.flagged_tracks_excluded)])), [summary.models, predictions, h, k.sfx, summary.flagged_tracks_excluded]);
 
   const hist = useMemo(() => {
     const all = summary.models.flatMap((m) => series[m].map((r) => r.fde));
@@ -256,6 +304,16 @@ export function AnalyticsPanel({ data, onJump }: { data: RunData; onJump: (id: s
 
   const learned = summary.per_model_horizon[`learned@${hk(h)}`];
   const rel = learned?.reliability;
+  // nearest stored forecast (scored at this horizon, not on a flagged track if possible) to a clicked time
+  const jumpNear = (t: number) => {
+    if (!Number.isFinite(t) || !predictions.length) return;
+    const bad = new Set(summary.flagged_tracks_excluded);
+    const pool = predictions.filter((p) => !bad.has(p.track_id) && p.evaluations[hk(h)]?.included);
+    const src = pool.length ? pool : predictions;
+    let best = src[0];
+    for (const p of src) if (Math.abs(p.t - t) < Math.abs(best.t - t)) best = p;
+    onJump(best.id, h);
+  };
   const cov = summary.horizons.map((hh) => ({
     h: `${hh}s`,
     ...Object.fromEntries(summary.models.flatMap((m) => [[`${m}_50`, summary.per_model_horizon[`${m}@${hk(hh)}`]?.coverage50 ?? null], [`${m}_90`, summary.per_model_horizon[`${m}@${hk(hh)}`]?.coverage90 ?? null]])),
@@ -365,10 +423,12 @@ export function AnalyticsPanel({ data, onJump }: { data: RunData; onJump: (id: s
 
       <Heatmap data={data} h={h} />
 
+      <TagAccuracy data={data} h={h} unit={k.px ? "body heights" : "m"} />
+
       <Panel title="Tracking reliability over time">
         <div className="h-48">
           <ResponsiveContainer>
-            <LineChart data={summary.tracking_over_time} margin={{ left: -10, right: 10 }}>
+            <LineChart data={summary.tracking_over_time} margin={{ left: -10, right: 10 }} style={{ cursor: "pointer" }} onClick={(e: any) => jumpNear(Number(e?.activeLabel))}>
               <CartesianGrid stroke="#16202c" />
               <XAxis dataKey="t" type="number" unit="s" stroke="#64748b" fontSize={10} domain={["dataMin", "dataMax"]} />
               <YAxis yAxisId="a" stroke="#64748b" fontSize={10} allowDecimals={false} />
@@ -382,11 +442,92 @@ export function AnalyticsPanel({ data, onJump }: { data: RunData; onJump: (id: s
           </ResponsiveContainer>
         </div>
         <p className="text-[11px] text-dim">
-          Red lines: detected camera cuts (tracks reset). {summary.tracking_over_time.filter((f) => f.camera_moving).length} sampled frames flagged as camera moving.
+          Click the chart to open the stored forecast nearest to that time. Red lines: detected camera cuts (tracks reset; new tracks get new ids). {summary.tracking_over_time.filter((f) => f.camera_moving).length} sampled frames flagged as camera moving.
           Exclusions at {h}s: {Object.entries(summary.inclusion[hk(h)] ?? {}).map(([kk, v]) => `${kk} ${v}`).join(" · ")}.
+          {summary.forecast_failures?.count ? ` Forecast failures (eligible tracks with no forecast; no sample for any model): ${summary.forecast_failures.count} - ${Object.entries(summary.forecast_failures.by_reason).map(([kk, v]) => `${kk} ${v}`).join(" · ")}.` : ""}
         </p>
       </Panel>
     </div>
+  );
+}
+
+// Accuracy grouped by run tag (sport / camera perspective) across all finished runs that share this run's unit.
+function TagAccuracy({ data, h, unit }: { data: RunData; h: number; unit: "m" | "body heights" }) {
+  const [runs, setRuns] = useState<EvalCompareRun[] | null>(null);
+  const [tag, setTag] = useState<"sport" | "camera_perspective">("sport");
+  const [err, setErr] = useState<string | null>(null);
+  const runId = data.summary.run_id;
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      try {
+        const all = (await getJSON<{ runs: EvalRunInfo[] }>("/api/eval/runs")).runs.filter((r) => r.status === "done").map((r) => r.run_id);
+        if (!all.length) return;
+        const c = await getJSON<EvalCompare>(`/api/eval/compare?runs=${encodeURIComponent(all.join(","))}`);
+        if (live) setRuns(c.runs);
+      } catch (e: any) {
+        if (live) setErr(String(e.message ?? e));
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, [runId, data.summary]);
+
+  const same = (runs ?? []).filter((r) => r.unit === unit);
+  const held = same.filter((r) => !r.source?.scene_in_active_model_training);
+  const models = data.summary.models;
+  const groups = new Map<string, Record<string, any>>();
+  for (const r of held) {
+    const g = (r.tags?.[tag] || "untagged").trim();
+    const e = groups.get(g) ?? { tag: g, runs: 0 };
+    e.runs += 1;
+    for (const m of models) {
+      const v = r.per_model_horizon[`${m}@${hk(h)}`];
+      if (!v?.n || !v.fde_top1) continue;
+      e[`${m}_s`] = (e[`${m}_s`] ?? 0) + v.fde_top1.mean * v.n;
+      e[`${m}_n`] = (e[`${m}_n`] ?? 0) + v.n;
+    }
+    groups.set(g, e);
+  }
+  const rows = Array.from(groups.values()).map((e) => ({ ...e, ...Object.fromEntries(models.map((m) => [m, e[`${m}_n`] ? e[`${m}_s`] / e[`${m}_n`] : null])) }));
+
+  return (
+    <Panel
+      title={`Accuracy by run tag at ${h}s (mean FDE top-1, ${unit})`}
+      right={
+        <div className="flex gap-1">
+          {(["sport", "camera_perspective"] as const).map((t) => (
+            <button key={t} className={`tab ${t === tag ? "tab-on" : ""}`} onClick={() => setTag(t)}>{t === "sport" ? "sport / activity" : "camera perspective"}</button>
+          ))}
+        </div>
+      }
+    >
+      {err && <p className="text-xs text-bad">{err}</p>}
+      {runs && rows.length ? (
+        <div className="h-52">
+          <ResponsiveContainer>
+            <BarChart data={rows}>
+              <CartesianGrid stroke="#16202c" />
+              <XAxis dataKey="tag" stroke="#64748b" fontSize={10} />
+              <YAxis stroke="#64748b" fontSize={10} />
+              <Tooltip contentStyle={TT} formatter={(v: number) => (typeof v === "number" ? v.toFixed(3) : v)} />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              {models.map((m) => <Bar key={m} dataKey={m} name={MNAME[m]} fill={MCOL[m]} />)}
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      ) : (
+        <p className="text-xs text-dim">{runs ? "No finished runs in this unit yet." : "Loading runs…"}</p>
+      )}
+      <p className="mt-1 text-[11px] text-dim">
+        Sample-weighted over {held.length} finished run{held.length === 1 ? "" : "s"} measured in {unit}
+        {same.length < (runs?.length ?? 0) ? ` (${(runs?.length ?? 0) - same.length} run(s) in another unit left out - units are never mixed)` : ""}
+        {same.length > held.length ? `; ${same.length - held.length} in-sample run(s) (scene in the learned model's training data) left out` : ""}.
+        Tag runs when you create them to group them here. By object: every sample is a person (the only tracked class).
+        Reviewer-flagged inaccurate tracks are excluded in each run.
+      </p>
+    </Panel>
   );
 }
 
@@ -431,7 +572,9 @@ function Heatmap({ data, h }: { data: RunData; h: number }) {
       </div>
       <p className="mt-1 text-[11px] text-dim">
         Computed from evaluation results at {h}s only. Error cells need ≥ {hm.min_samples_to_display} samples ({hm.unit}). Green = low, red = high.
-        &ldquo;Direction changes&rdquo; = mean heading change in the actual future path. Object type: person (the only class this system tracks).
+        &ldquo;Direction changes&rdquo; = mean heading change in the actual future path. Filters: model (buttons) and horizon (above).
+        Object type is always person (the only class this system detects and tracks), so there is no object filter. Camera angle and sport are run
+        tags: compare them across runs with &ldquo;Accuracy by run tag&rdquo; below or by opening a run with that tag.
       </p>
     </Panel>
   );
@@ -445,16 +588,18 @@ export function FailurePanel({ data, onJump, onChanged }: { data: RunData; onJum
   const [model, setModel] = useState(summary.models.includes("learned") ? "learned" : summary.models[0]);
   const [q, setQ] = useState("");
   const [showExcluded, setShowExcluded] = useState(false);
-  const [flags, setFlags] = useState<any[]>([]);
+  const [flags, setFlags] = useState<EvalFlag[]>([]);
   useEffect(() => {
     getJSON<any>(`/api/eval/runs/${summary.run_id}/export.json`).then((r) => setFlags(r.flags)).catch(() => {});
   }, [summary.run_id, predictions]);
 
   const rows = useMemo(() => {
+    const bad = new Set(summary.flagged_tracks_excluded);
     const out = predictions.map((p) => {
       const ev = p.evaluations[hk(h)];
-      const s = ev?.included ? ev.scores?.[model] : undefined;
-      return { p, ev, s, fde: s ? (s as any)["fde_top1" + k.sfx] : null, mfde: s ? (s as any)["min_fde" + k.sfx] : null };
+      const badTrack = bad.has(p.track_id);
+      const s = ev?.included && !badTrack ? ev.scores?.[model] : undefined;
+      return { p, ev, s, badTrack, fde: s ? (s as any)["fde_top1" + k.sfx] : null, mfde: s ? (s as any)["min_fde" + k.sfx] : null };
     });
     const term = q.trim().toLowerCase();
     return out
@@ -462,11 +607,17 @@ export function FailurePanel({ data, onJump, onChanged }: { data: RunData; onJum
       .filter((r) => !term || `#${r.p.track_id} ${r.p.flags.join(" ")} ${r.ev?.exclusion_reasons?.join(" ") ?? ""} ${r.p.t.toFixed(1)}`.toLowerCase().includes(term))
       .sort((a, b) => (b.fde ?? -1) - (a.fde ?? -1))
       .slice(0, 300);
-  }, [predictions, h, model, k.sfx, q, showExcluded]);
+  }, [predictions, h, model, k.sfx, q, showExcluded, summary.flagged_tracks_excluded]);
 
   const flagged = new Set(flags.map((f) => f.prediction_id).filter(Boolean));
   const unflag = async (p: EvalPrediction) => {
     await postJSON(`/api/eval/runs/${summary.run_id}/flags`, { kind: "unflag", prediction_id: p.id, track_id: null });
+    onChanged();
+  };
+  // undo from the flags table: prediction-level flags by prediction id, track-level 'inaccurate' flags by track id
+  const undo = async (f: EvalFlag) => {
+    await postJSON(`/api/eval/runs/${summary.run_id}/flags`,
+      f.prediction_id ? { kind: "unflag", prediction_id: f.prediction_id, track_id: null } : { kind: "unflag", prediction_id: null, track_id: f.track_id });
     onChanged();
   };
 
@@ -483,7 +634,7 @@ export function FailurePanel({ data, onJump, onChanged }: { data: RunData; onJum
           <table className="tbl">
             <thead><tr><th>video time</th><th>track</th><th>FDE top-1 ({k.unit})</th><th>best-of-K FDE</th><th>top / closest path</th><th>quality flags</th><th>status</th><th /></tr></thead>
             <tbody>
-              {rows.map(({ p, ev, s, fde, mfde }) => (
+              {rows.map(({ p, ev, s, badTrack, fde, mfde }) => (
                 <tr key={p.id} className="hover:bg-panel2">
                   <td className="font-mono"><button className="underline" onClick={() => onJump(p.id, h)}>{p.t.toFixed(2)} s</button></td>
                   <td>#{p.track_id}</td>
@@ -491,7 +642,7 @@ export function FailurePanel({ data, onJump, onChanged }: { data: RunData; onJum
                   <td className="font-mono">{fmt(mfde)}</td>
                   <td>{s ? `${s.top_id} / ${s.best_id}` : "–"}</td>
                   <td className="text-warn">{p.flags.join(", ")}</td>
-                  <td>{ev?.included ? "scored" : <span className="text-dim">excluded: {ev?.exclusion_reasons?.join(", ")}</span>}</td>
+                  <td>{badTrack ? <span className="text-dim">excluded: track flagged inaccurate</span> : ev?.included ? "scored" : <span className="text-dim">excluded: {ev?.exclusion_reasons?.join(", ")}</span>}</td>
                   <td>{flagged.has(p.id) ? <button className="text-[11px] text-warn underline" onClick={() => unflag(p)}>flagged · undo</button> : null}</td>
                 </tr>
               ))}
@@ -507,13 +658,20 @@ export function FailurePanel({ data, onJump, onChanged }: { data: RunData; onJum
           <li>After updating a model, use &ldquo;Re-run&rdquo; in Model Comparison to evaluate it on the same source and compare versions.</li>
         </ul>
         <table className="tbl">
-          <thead><tr><th>kind</th><th>prediction</th><th>track</th><th>note</th><th>created</th></tr></thead>
+          <thead><tr><th>kind</th><th>prediction</th><th>track</th><th>note</th><th>created</th><th /></tr></thead>
           <tbody>
-            {flags.map((f, i) => <tr key={i}><td>{f.kind}</td><td className="font-mono">{f.prediction_id ?? "–"}</td><td>{f.track_id ?? "–"}</td><td>{f.note}</td><td>{f.created}</td></tr>)}
-            {!flags.length && <tr><td colSpan={5} className="text-dim">No flags yet.</td></tr>}
+            {flags.map((f, i) => (
+              <tr key={i}>
+                <td>{f.kind}{f.kind === "annotation_correction" && f.corrected_future ? ` (${f.corrected_future.length} pts)` : ""}</td>
+                <td className="font-mono">{f.prediction_id ? <button className="underline" onClick={() => onJump(f.prediction_id!, h)}>{f.prediction_id}</button> : "–"}</td>
+                <td>{f.track_id ?? "–"}</td><td>{f.note}</td><td>{f.created}</td>
+                <td>{f.prediction_id || f.kind === "inaccurate_track" ? <button className="text-[11px] text-warn underline" onClick={() => undo(f)}>undo</button> : null}</td>
+              </tr>
+            ))}
+            {!flags.length && <tr><td colSpan={6} className="text-dim">No flags yet.</td></tr>}
           </tbody>
         </table>
-        {summary.flagged_tracks_excluded.length > 0 && <p className="mt-1 text-[11px] text-warn">Excluded from statistics as inaccurate tracks: {summary.flagged_tracks_excluded.map((t) => `#${t}`).join(", ")}</p>}
+        {summary.flagged_tracks_excluded.length > 0 && <p className="mt-1 text-[11px] text-warn">Excluded from every statistic and chart as inaccurate tracks: {summary.flagged_tracks_excluded.map((t) => `#${t}`).join(", ")} (use &ldquo;undo&rdquo; above to restore).</p>}
       </Panel>
     </div>
   );

@@ -34,6 +34,15 @@ export default function EvalTab() {
   const fileRef = useRef<HTMLInputElement>(null);
   const attachRef = useRef<HTMLInputElement>(null);
   const pending = useRef<File | null>(null);
+  const activeRef = useRef<string | null>(null);
+  const loading = useRef<string | null>(null);
+  const loadSeq = useRef(0);
+  const [scenes, setScenes] = useState<{ scene: string; available: boolean; held_out_for_active_model: boolean | null }[]>([]);
+  activeRef.current = active;
+
+  useEffect(() => {
+    getJSON<{ scenes: { scene: string; available: boolean; held_out_for_active_model: boolean | null }[] }>("/api/demo/scenes").then((r) => setScenes(r.scenes)).catch(() => {});
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
@@ -50,10 +59,15 @@ export default function EvalTab() {
     return () => clearInterval(id);
   }, [refresh, runs]);
 
-  const load = useCallback(async (id: string) => {
+  // keep=true refreshes the shown run in place (after a flag) so the replay keeps its selection
+  const load = useCallback(async (id: string, keep = false) => {
+    const seq = ++loadSeq.current;
+    activeRef.current = id;
     setActive(id);
-    setData(null);
-    setFocus(null);
+    if (!keep) {
+      setData(null);
+      setFocus(null);
+    }
     try {
       const [info, summary, preds, tracks] = await Promise.all([
         getJSON<EvalRunInfo>(`/api/eval/runs/${id}`),
@@ -61,15 +75,33 @@ export default function EvalTab() {
         getJSON<{ predictions: EvalPrediction[] }>(`/api/eval/runs/${id}/predictions`),
         getJSON<RunData["tracks"]>(`/api/eval/runs/${id}/tracks`),
       ]);
+      if (seq !== loadSeq.current || activeRef.current !== id) return; // a newer selection superseded this load
       setData({ info, summary, predictions: preds.predictions, tracks });
     } catch (e: any) {
+      if (seq !== loadSeq.current) return;
       setErr(String(e.message ?? e));
     }
   }, []);
 
+  // switch the shown run; invalidates any in-flight load of the previous one
+  const select = (id: string | null) => {
+    activeRef.current = id;
+    loadSeq.current++;
+    loading.current = null;
+    setActive(id);
+    setData(null);
+    setFocus(null);
+  };
+
   useEffect(() => {
     const r = runs.find((x) => x.run_id === active);
-    if (r?.status === "done" && !data) load(r.run_id);
+    if (r?.status === "done" && !data) {
+      if (loading.current === r.run_id) return;
+      loading.current = r.run_id;
+      load(r.run_id).finally(() => {
+        if (loading.current === r.run_id) loading.current = null;
+      });
+    }
   }, [runs, active, data, load]);
 
   const evalConfig = () => {
@@ -96,8 +128,7 @@ export default function EvalTab() {
       if (!r.ok) throw new Error(await r.text());
       const { run_id } = await r.json();
       setVideos((v) => ({ ...v, [run_id]: { url: URL.createObjectURL(file), match: true } })); // same browser session: same file
-      setActive(run_id);
-      setData(null);
+      select(run_id);
       refresh();
     } catch (e: any) {
       setErr(String(e.message ?? e));
@@ -108,8 +139,7 @@ export default function EvalTab() {
     setErr(null);
     try {
       const { run_id } = await postJSON<{ run_id: string }>("/api/eval/runs/dataset", { scene: form.scene, config: { ...evalConfig(), calibration: null, max_duration_s: form.maxS } });
-      setActive(run_id);
-      setData(null);
+      select(run_id);
       refresh();
     } catch (e: any) {
       setErr(String(e.message ?? e));
@@ -130,6 +160,10 @@ export default function EvalTab() {
 
   const toggle = <T,>(arr: T[], v: T) => (arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
   const activeInfo = runs.find((r) => r.run_id === active);
+  const selScene = scenes.find((x) => x.scene === form.scene);
+  // run.json source.scene_in_active_model_training: true = in-sample, false = held out, null/undefined = video or unknown
+  const inSample = (r: EvalRunInfo | undefined | null) => r?.meta?.source?.scene_in_active_model_training as boolean | null | undefined;
+  const dataInSample = data ? (inSample(data.info) ?? data.summary.scene_in_active_model_training) : null;
 
   return (
     <div className="space-y-3">
@@ -165,12 +199,23 @@ export default function EvalTab() {
           <input ref={fileRef} type="file" accept="video/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) { pending.current = f; upload(f); } e.target.value = ""; }} />
           <div className="flex items-center gap-2 border-t border-line pt-2">
             <select className="inp" value={form.scene} onChange={(e) => setForm({ ...form, scene: e.target.value })}>
-              {["zara1", "zara2", "eth", "hotel", "univ"].map((x) => <option key={x}>{x}</option>)}
+              {(scenes.length ? scenes.map((x) => x.scene) : ["zara1", "zara2", "eth", "hotel", "univ"]).map((x) => {
+                const sc = scenes.find((y) => y.scene === x);
+                return <option key={x} value={x}>{x}{sc ? (sc.held_out_for_active_model === true ? " (held out)" : sc.held_out_for_active_model === false ? " (in training data)" : " (training status unknown)") : ""}</option>;
+              })}
             </select>
             <input className="inp w-16" type="number" value={form.maxS} onChange={(e) => setForm({ ...form, maxS: Number(e.target.value) })} title="seconds" />
             <button className="btn flex-1" onClick={datasetRun}>Evaluate annotated scene</button>
           </div>
-          <p className="text-[10px] text-dim">Annotated scenes use human-labelled positions as true ground truth (validates the engine and the models in meters).</p>
+          <p className="text-[10px] text-dim">
+            Annotated scenes use human-labelled positions as true ground truth (validates the engine and the models in meters). Only the active model&apos;s
+            held-out scene is an independent test of the learned model.
+          </p>
+          {selScene && selScene.held_out_for_active_model === false && form.models.includes("learned") && (
+            <p className="rounded border border-warn/50 bg-warn/10 p-1 text-[11px] text-warn">
+              In-sample: the active learned model was trained on scene &ldquo;{form.scene}&rdquo;. Its accuracy here is optimistic and is not a held-out evaluation.
+            </p>
+          )}
           {err && <p className="text-xs text-bad">{err}</p>}
         </section>
 
@@ -184,9 +229,12 @@ export default function EvalTab() {
               <thead><tr><th>run</th><th>source</th><th>tags</th><th>status</th><th>forecasts</th><th>coords</th></tr></thead>
               <tbody>
                 {runs.map((r) => (
-                  <tr key={r.run_id} onClick={() => { setActive(r.run_id); setData(null); if (r.status === "done") load(r.run_id); }} className={`cursor-pointer ${r.run_id === active ? "bg-accent/10" : "hover:bg-panel2"}`}>
+                  <tr key={r.run_id} onClick={() => { if (r.run_id !== active) select(r.run_id); }} className={`cursor-pointer ${r.run_id === active ? "bg-accent/10" : "hover:bg-panel2"}`}>
                     <td className="font-mono">{r.run_id}</td>
-                    <td>{r.meta?.source?.filename ?? (r.request?.scene ? `scene ${r.request.scene}` : "–")}</td>
+                    <td>
+                      {r.meta?.source?.filename ?? (r.request?.scene ? `scene ${r.request.scene}` : "–")}
+                      {inSample(r) === true && <span className="ml-1 rounded bg-warn/20 px-1 text-[10px] text-warn" title="the active learned model was trained on this scene">in-sample</span>}
+                    </td>
                     <td>{[r.meta?.tags?.sport, r.meta?.tags?.camera_perspective].filter(Boolean).join(" · ") || "–"}</td>
                     <td className={r.status === "error" ? "text-bad" : r.status === "done" ? "text-good" : "text-warn"}>
                       {r.status}{r.status === "running" ? ` ${(r.progress * 100).toFixed(0)}%` : ""}
@@ -216,7 +264,7 @@ export default function EvalTab() {
                 </>
               )}
               {videos[active!]?.match === false && <span className="text-bad">attached file does not match the analysed video (SHA-256)</span>}
-              <button className="btn ml-auto text-bad" onClick={async () => { await fetch(`${API_URL}/api/eval/runs/${active}`, { method: "DELETE" }); setActive(null); setData(null); refresh(); }}>Delete run</button>
+              <button className="btn ml-auto text-bad" onClick={async () => { await fetch(`${API_URL}/api/eval/runs/${active}`, { method: "DELETE" }); select(null); refresh(); }}>Delete run</button>
             </div>
           )}
         </section>
@@ -224,6 +272,16 @@ export default function EvalTab() {
 
       {data && (
         <>
+          {dataInSample === true && data.summary.models.includes("learned") && (
+            <div className="rounded-lg border border-warn/60 bg-warn/10 p-2 text-xs text-warn">
+              In-sample evaluation: the learned model was trained on scene &ldquo;{data.info.meta?.source?.scene}&rdquo;
+              {data.info.meta?.source?.active_model_training_scenes ? ` (training scenes: ${data.info.meta.source.active_model_training_scenes.join(", ")})` : ""}.
+              Its numbers below are optimistic and are not a held-out test; the Kalman baseline is unaffected.
+            </div>
+          )}
+          {dataInSample == null && data.info.meta?.source?.type === "dataset_scene" && data.summary.models.includes("learned") && (
+            <div className="rounded-lg border border-line bg-panel p-2 text-xs text-dim">It is unknown whether this scene was in the learned model&apos;s training data.</div>
+          )}
           <div className="flex flex-wrap items-center gap-1">
             {TABS.map((t) => (
               <button key={t} className={`tab px-3 py-1.5 ${tab === t ? "tab-on" : ""}`} onClick={() => setTab(t)}>{t}</button>
@@ -233,10 +291,10 @@ export default function EvalTab() {
               {data.summary.normalised_unit ? " · pixel errors also in body heights" : ""}
             </span>
           </div>
-          {tab === "Video Replay" && <ReplayPanel data={data} videoUrl={active ? videos[active]?.url ?? null : null} focus={focus} onFlagged={() => active && load(active)} />}
-          {tab === "Model Comparison" && <ComparisonPanel data={data} onJump={jump} onRerun={(id) => { setActive(id); setData(null); refresh(); }} />}
+          {tab === "Video Replay" && <ReplayPanel data={data} videoUrl={active ? videos[active]?.url ?? null : null} focus={focus} onFlagged={() => active && load(active, true)} />}
+          {tab === "Model Comparison" && <ComparisonPanel data={data} onJump={jump} onRerun={(id) => { select(id); refresh(); }} />}
           {tab === "Accuracy Analytics" && <AnalyticsPanel data={data} onJump={jump} />}
-          {tab === "Failure Analysis" && <FailurePanel data={data} onJump={jump} onChanged={() => active && load(active)} />}
+          {tab === "Failure Analysis" && <FailurePanel data={data} onJump={jump} onChanged={() => active && load(active, true)} />}
         </>
       )}
     </div>

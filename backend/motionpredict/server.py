@@ -7,6 +7,8 @@ WebSocket ``/ws/stream`` (browser webcam / video file)
                                  {"type": "calibration", ...CalibrationRequest} | {"type": "clear_calibration"}
                                  {"type": "server_source", "url": "rtsp://..."}   (needs MP_ALLOW_SERVER_SOURCES=1)
                                  {"type": "reset"}
+                                 {"type": "pause", "paused": bool}  -> ack {"type":"ack","what":"pause","paused":bool};
+                                   pauses the server-side (RTSP) source loop; browser sources pause client-side
     server -> client  text JSON: FrameResult | {"type": "hello"|"ack"|"error", ...}
 
 Back-pressure: the receiver keeps only the newest unprocessed frame (older pending frames are
@@ -23,6 +25,7 @@ import base64
 import json
 import logging
 import os
+import re
 import struct
 import threading
 import time
@@ -39,7 +42,7 @@ from .calibration import fit_calibration
 from .demo import ReplayDetector, SceneReplay
 from .device import select_device
 from .evaluation.engine import EVAL_DIR_DEFAULT, EvaluationRun
-from .evaluation.report import load_predictions, summarise
+from .evaluation.report import _bootstrap_diff, load_predictions, rows_from_predictions, summarise
 from .explain import facts_for_track, llm_summary, rule_based_summary
 from .forecasting.service import MODELS_DIR, Forecaster
 from .pipeline import Session, now_ms
@@ -170,15 +173,34 @@ def explain(req: ExplainRequest) -> dict:
 def demo_scenes() -> dict:
     from .forecasting.data import SCENES
 
-    held = (S.forecaster.meta.get("held_out_test_scene") if S.forecaster else None)
     return {"scenes": [{"scene": s, "available": all((RAW_DIR / f).exists() for f in fs),
-                        "held_out_for_active_model": s == held} for s, fs in SCENES.items()]}
+                        "held_out_for_active_model": _held_out_for_active_model(s)} for s, fs in SCENES.items()]}
+
+
+def _held_out_for_active_model(scene: str) -> bool | None:
+    """True if the active learned model never saw ``scene`` in training, False if it did, None if unknown
+    (no model loaded, or the checkpoint does not record its training scenes)."""
+    fc = S.forecaster
+    if fc is None or not fc.available:
+        return None
+    if scene == fc.meta.get("held_out_test_scene"):
+        return True
+    trained = fc.meta.get("trained_on")
+    if trained is not None:
+        return scene not in trained
+    return None
 
 
 # ------------------------------------------------------- evaluation API
+RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")  # generated ids look like 20261113-193452-fa3ee8
+
+
 def _run_dir(run_id: str) -> Path:
+    # names starting with '_' (e.g. _uploads) or '.' are internal directories, never runs
+    if not RUN_ID_RE.match(run_id or "") or ".." in run_id:
+        raise HTTPException(404, "unknown run")
     d = (EVAL_DIR / run_id).resolve()
-    if EVAL_DIR.resolve() not in d.parents or not d.exists():
+    if d.parent != EVAL_DIR.resolve() or not d.is_dir():
         raise HTTPException(404, "unknown run")
     return d
 
@@ -369,19 +391,84 @@ def eval_review_set(run_id: str, top_n: int = 50) -> dict:
             "source_recording_sha256": json.loads((d / "run.json").read_text())["source"].get("sha256"), "examples": ex}
 
 
+COMPARE_KEYS = ("ade_top1", "fde_top1", "min_ade", "min_fde")
+
+
+def _run_unit(coord: str) -> tuple[str, str]:
+    """(unit, metric-key suffix): metric runs in meters, pixel runs normalised to body heights."""
+    return ("m", "") if coord == "ground_plane_meters" else ("body heights", "_bh")
+
+
+def _paired_key(meta: dict) -> tuple | None:
+    """Runs with an equal key processed the same source with the same configuration."""
+    src = meta.get("source") or {}
+    ident = src.get("sha256") or (f"scene:{src['scene']}" if src.get("scene") else None)
+    if ident is None:
+        return None
+    ev = {k: v for k, v in (meta.get("eval_config") or {}).items() if k != "models"}
+    return (ident, meta.get("coordinate_system"), json.dumps(ev, sort_keys=True),
+            json.dumps(meta.get("pipeline_config"), sort_keys=True), json.dumps(meta.get("calibration"), sort_keys=True))
+
+
 @app.get("/api/eval/compare")
 def eval_compare(runs: str) -> dict:
-    """Cross-run comparison (e.g. model versions, sports, camera perspectives via run tags)."""
-    out = []
-    for rid in runs.split(","):
-        d = _run_dir(rid.strip())
-        if (d / "summary.json").exists():
-            m = json.loads((d / "run.json").read_text())
-            sm = json.loads((d / "summary.json").read_text())
-            out.append({"run_id": rid, "tags": m.get("tags"), "models": m.get("models"), "coordinate_system": sm["coordinate_system"],
-                        "per_model_horizon": {k: {kk: v.get(kk) for kk in ("n", "ade_top1", "fde_top1", "ade_top1_bh", "fde_top1_bh", "min_fde",
-                                                                            "miss_rate_top1", "coverage90")} for k, v in sm["per_model_horizon"].items()}})
-    return {"runs": out}
+    """Cross-run comparison (model versions, sports, camera perspectives via run tags).
+
+    Every distance in a run row uses one unit (``unit``): meters for metric runs, body heights for
+    pixel runs. ``paired`` compares the same model key across runs that processed the same source
+    (sha256 / dataset scene) with the same configuration, pairing predictions by (track_id, t)."""
+    out, loaded = [], []
+    for rid in [r.strip() for r in runs.split(",") if r.strip()]:
+        d = _run_dir(rid)
+        if not (d / "summary.json").exists():
+            continue
+        m = json.loads((d / "run.json").read_text())
+        sm = json.loads((d / "summary.json").read_text())
+        unit, sfx = _run_unit(sm["coordinate_system"])
+        pmh = {}
+        for k, v in sm["per_model_horizon"].items():
+            row = {"n": v.get("n")}
+            for kk in COMPARE_KEYS:
+                row[kk] = v.get(kk + sfx)
+            row.update({"miss_rate_top1": v.get("miss_rate_top1"), "coverage90": v.get("coverage90"),
+                        "coverage50": v.get("coverage50"), "latency_ms": v.get("latency_ms"),
+                        "reliability_ece": (v.get("reliability") or {}).get("ece")})
+            pmh[k] = row
+        out.append({"run_id": rid, "tags": m.get("tags"), "models": m.get("models"), "coordinate_system": sm["coordinate_system"],
+                    "unit": unit, "source": m.get("source"), "per_model_horizon": pmh})
+        loaded.append((rid, d, m, sfx, unit))
+    paired = []
+    for a in range(len(loaded)):
+        for b in range(a + 1, len(loaded)):
+            ra, rb = loaded[a], loaded[b]
+            ka = _paired_key(ra[2])
+            if ka is None or ka != _paired_key(rb[2]):
+                continue
+            ta, tb = _paired_rows(ra[1], ra[3]), _paired_rows(rb[1], rb[3])
+            for key in sorted(set(ta) & set(tb)):
+                model, h = key
+                common = sorted(set(ta[key]) & set(tb[key]))
+                if len(common) < 2:
+                    continue
+                va = np.array([ta[key][c] for c in common])
+                vb = np.array([tb[key][c] for c in common])
+                paired.append({"run_a": ra[0], "run_b": rb[0], "model": model, "horizon": h, "n_pairs": len(common),
+                               "unit": ra[4], "comparison": "run_b minus run_a (negative = run_b better)",
+                               "fde_top1": {k: v for k, v in _bootstrap_diff(vb, va).items() if k != "n_pairs"}})
+    return {"runs": out, "paired": paired}
+
+
+def _paired_rows(d: Path, sfx: str) -> dict:
+    """{(model, horizon_key): {(track_id, t): fde_top1}} for included samples of non-flagged tracks."""
+    flags = json.loads((d / "flags.json").read_text()) if (d / "flags.json").exists() else []
+    bad = {f.get("track_id") for f in flags if f.get("kind") == "inaccurate_track"}
+    res: dict = {}
+    for r in rows_from_predictions(load_predictions(d)):
+        v = r.get("fde_top1" + sfx)
+        if not r["included"] or r["track_id"] in bad or v is None or not np.isfinite(v):
+            continue
+        res.setdefault((r["model"], str(float(r["horizon"]))), {})[(r["track_id"], round(float(r["t"]), 3))] = float(v)
+    return res
 
 
 @app.get("/api/models")
@@ -418,10 +505,16 @@ async def handle_control(ws: WebSocket, sess: Session, msg: dict) -> None:
     elif typ == "calibration":
         try:
             req = CalibrationRequest(**{k: v for k, v in msg.items() if k != "type"})
-            sess.calibration = fit_calibration(req.image_points, req.world_points, req.camera_height_m, req.reference, req.height_tolerance)
-            for st in sess.kin.values():
-                st["w"] = None
-                st["heights"].clear()
+            cal = fit_calibration(req.image_points, req.world_points, req.camera_height_m, req.reference, req.height_tolerance)
+
+            def _apply() -> None:
+                with sess.lock:  # never mutate per-person state while a frame is being processed
+                    sess.calibration = cal
+                    for st in sess.kin.values():
+                        st["w"] = None
+                        st["heights"].clear()
+
+            await asyncio.to_thread(_apply)
             await ws.send_json({"type": "ack", "what": "calibration", "calibration": sess.calibration.to_dict()})
         except (ValueError, ValidationError) as e:
             await ws.send_json({"type": "error", "where": "calibration", "error": str(e)})
@@ -429,7 +522,7 @@ async def handle_control(ws: WebSocket, sess: Session, msg: dict) -> None:
         sess.calibration = None
         await ws.send_json({"type": "ack", "what": "clear_calibration"})
     elif typ == "reset":
-        sess.reset()
+        await asyncio.to_thread(sess.reset)  # waits for an in-flight frame (per-session lock)
         await ws.send_json({"type": "ack", "what": "reset"})
 
 
@@ -445,7 +538,7 @@ async def ws_stream(ws: WebSocket) -> None:
     slot: dict = {"item": None}
     ev = asyncio.Event()
     closed = asyncio.Event()
-    server_src: dict = {"task": None}
+    server_src: dict = {"task": None, "paused": False}
 
     async def worker() -> None:
         while not closed.is_set():
@@ -454,12 +547,16 @@ async def ws_stream(ws: WebSocket) -> None:
             item, slot["item"] = slot["item"], None
             if item is None:
                 continue
-            header, img, decode_ms, nbytes, recv_ms, src, jpeg_b64 = item
+            header, img, decode_ms, nbytes, recv_ms, src, jpeg_b64, gen = item
             try:
+                if gen != sess.generation:  # captured before a reset
+                    continue
                 res = await asyncio.to_thread(
                     sess.process, img, int(header.get("frame_id", 0)), header.get("capture_ts_ms", recv_ms) / 1000.0,
                     recv_ms, header.get("client_ts_ms"), src, decode_ms, nbytes,
                 )
+                if gen != sess.generation:  # a reset happened while this frame was processed: result is stale
+                    continue
                 if jpeg_b64:
                     res.frame_jpeg_b64 = jpeg_b64
                 await ws.send_text(res.model_dump_json())
@@ -473,11 +570,13 @@ async def ws_stream(ws: WebSocket) -> None:
                     return
 
     def enqueue(item) -> None:
-        sess.frames_received += 1
-        if slot["item"] is not None:
-            sess.frames_dropped += 1
-        slot["item"] = item
+        sess.note_received(item[4], dropped_previous=slot["item"] is not None)
+        slot["item"] = (*item, sess.generation)
         ev.set()
+
+    async def reset_session() -> None:
+        slot["item"] = None  # a frame captured before the reset must not be processed after it
+        await asyncio.to_thread(sess.reset)
 
     async def server_source(url: str) -> None:
         """Pull frames from an RTSP/HTTP/file source on the server (local, authorised setups only)."""
@@ -485,6 +584,9 @@ async def ws_stream(ws: WebSocket) -> None:
         fid = 0
         try:
             while not closed.is_set():
+                if server_src["paused"]:  # C1: stop reading/processing while paused
+                    await asyncio.sleep(0.1)
+                    continue
                 ok, frame = await asyncio.to_thread(cap.read)
                 if not ok:
                     await ws.send_json({"type": "error", "where": "server_source", "error": "source ended or disconnected; retrying in 2s"})
@@ -524,7 +626,8 @@ async def ws_stream(ws: WebSocket) -> None:
                         continue
                     if server_src["task"]:
                         server_src["task"].cancel()
-                    sess.reset()
+                    await reset_session()
+                    server_src["paused"] = False
                     server_src["task"] = asyncio.create_task(server_source(str(data.get("url", ""))))
                     await ws.send_json({"type": "ack", "what": "server_source"})
                 elif data.get("type") == "stop_server_source":
@@ -532,6 +635,14 @@ async def ws_stream(ws: WebSocket) -> None:
                         server_src["task"].cancel()
                         server_src["task"] = None
                     await ws.send_json({"type": "ack", "what": "stop_server_source"})
+                elif data.get("type") == "pause":
+                    server_src["paused"] = bool(data.get("paused", True))
+                    if server_src["paused"]:
+                        slot["item"] = None  # do not process a frame that arrived just before the pause
+                    await ws.send_json({"type": "ack", "what": "pause", "paused": server_src["paused"]})
+                elif data.get("type") == "reset":
+                    await reset_session()
+                    await ws.send_json({"type": "ack", "what": "reset"})
                 else:
                     await handle_control(ws, sess, data)
     except WebSocketDisconnect:
@@ -542,7 +653,9 @@ async def ws_stream(ws: WebSocket) -> None:
         if server_src["task"]:
             server_src["task"].cancel()
         wtask.cancel()
-        sess.reset()  # privacy: drop all per-person buffers immediately
+        # privacy: drop all per-person buffers; the lock makes this wait for a frame still in the worker thread,
+        # so that frame cannot repopulate the buffers afterwards
+        await asyncio.to_thread(sess.reset)
 
 
 @app.websocket("/ws/demo")
@@ -561,7 +674,7 @@ async def ws_demo(ws: WebSocket, scene: str = "zara1", speed: float = 1.0) -> No
     sess.apply_config(cfg)
     await ws.send_json({"type": "hello", "session_id": sess.id, "schema_version": SCHEMA_VERSION, "config": cfg.model_dump(),
                         "demo": {"scene": scene, "file": replay.file, "duration_s": replay.duration,
-                                 "held_out_for_active_model": S.forecaster.meta.get("held_out_test_scene") == scene}})
+                                 "held_out_for_active_model": _held_out_for_active_model(scene)}})
     state = {"paused": False, "speed": max(0.25, min(speed, 4.0))}
 
     async def receiver() -> None:
@@ -569,6 +682,7 @@ async def ws_demo(ws: WebSocket, scene: str = "zara1", speed: float = 1.0) -> No
             data = json.loads(await ws.receive_text())
             if data.get("type") == "pause":
                 state["paused"] = bool(data.get("paused", True))
+                await ws.send_json({"type": "ack", "what": "pause", "paused": state["paused"]})
             elif data.get("type") == "speed":
                 state["speed"] = max(0.25, min(float(data.get("speed", 1.0)), 4.0))
             elif data.get("type") == "config":
@@ -587,6 +701,7 @@ async def ws_demo(ws: WebSocket, scene: str = "zara1", speed: float = 1.0) -> No
             frame, t, mapping = replay.step(det)
             fid += 1
             recv = now_ms()
+            sess.note_received(recv)
             res = await asyncio.to_thread(sess.process, frame, fid, t, recv, None, "dataset_replay", 0.0, 0)
             # attach the true future for each track (matched by its detection box)
             gt = {}
@@ -606,7 +721,7 @@ async def ws_demo(ws: WebSocket, scene: str = "zara1", speed: float = 1.0) -> No
         pass
     finally:
         rtask.cancel()
-        sess.reset()
+        await asyncio.to_thread(sess.reset)
 
 
 FRONTEND_OUT = ROOT / "frontend" / "out"

@@ -62,3 +62,22 @@ def test_low_confidence_does_not_spawn_tracks():
     tr = ByteTracker(high_thresh=0.5, new_track_thresh=0.6)
     tr.update([box(100, 100, conf=0.3), box(300, 100, conf=0.55)], 0)
     assert tr.tracks == []
+
+
+def test_reset_keep_ids_never_reuses_ids():
+    tr = ByteTracker()
+    tr.update([box(100, 200)], 0.0)
+    first = tr.tracks[0].track_id
+    tr.reset(keep_ids=True)
+    tr.update([box(100, 200)], 0.0)
+    assert tr.tracks[0].track_id > first
+
+
+def test_time_going_backwards_drops_old_tracks():
+    tr = ByteTracker(track_buffer_s=1.0)
+    for i in range(10):
+        tr.update([box(100 + 5 * i, 200)], 5.0 + i * 0.1)
+    old = {t.track_id for t in tr.tracks}
+    tr.update([box(400, 200)], 0.0)  # looped video
+    assert all(t.track_id not in old for t in tr.tracks)
+    assert all(0.0 - t.last_t >= 0 for t in tr.tracks)

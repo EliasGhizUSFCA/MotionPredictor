@@ -28,7 +28,7 @@ import threading
 import time
 import traceback
 import uuid
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
@@ -75,6 +75,17 @@ def compact(f) -> dict:
         "sigma": [[_r(a, 4), _r(b, 4), _r(c, 3)] for a, b, c in t.sigma],
     } for t in f.trajectories]
     return out
+
+
+def _scene_in_training(scene: str | None, forecaster: Forecaster) -> bool | None:
+    """Was this ETH/UCY scene part of the active learned model's training data? None if unknown."""
+    if not forecaster.available:
+        return False
+    trained = forecaster.meta.get("trained_on")
+    if trained is not None:
+        return scene in trained
+    held = forecaster.meta.get("held_out_test_scene")
+    return False if held == scene else None
 
 
 class EvaluationRun:
@@ -177,7 +188,9 @@ class EvaluationRun:
             "run_id": self.id,
             "created": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "source": {"type": "dataset_scene" if is_scene else "video", "scene": scene,
-                       "filename": cfg.get("filename"), "sha256": _sha256(Path(video_path)) if video_path else None},
+                       "filename": cfg.get("filename"), "sha256": _sha256(Path(video_path)) if video_path else None,
+                       "scene_in_active_model_training": _scene_in_training(scene, forecaster) if is_scene else None,
+                       "active_model_training_scenes": forecaster.meta.get("trained_on") if forecaster.available else None},
             "ground_truth": "human annotations (ETH/UCY)" if is_scene else "tracker-derived pseudo ground truth (later detections of the same track)",
             "tags": cfg.get("tags", {}),
             "eval_config": {"interval_s": interval, "horizons": horizons, "models": models, "k_learned": 5,
@@ -200,6 +213,8 @@ class EvaluationRun:
         prev_small = None
         n_pred = 0
         t_last = 0.0
+        n_eligible = 0  # confirmed, detection-matched tracks at prediction times
+        failures = {"count": 0, "by_reason": Counter(), "by_model": Counter(), "examples": []}
         for fidx, t, frame, mapping in frames:
             if self.cancel.is_set():
                 break
@@ -208,9 +223,14 @@ class EvaluationRun:
             cut = prev_small is not None and float(np.abs(small - prev_small).mean()) > QUALITY_RULES["cut_threshold"]
             prev_small = small
             if cut:  # a hard cut breaks every track; start fresh to avoid cross-shot associations
-                sess.reset()
+                # pending forecasts end at the cut (their ground truth stops here); finalise them before
+                # any post-cut observation can be attached to them
                 for p in pending:
                     p["flags"].add("camera_cut")
+                    p["events"].setdefault("camera_cut", round(t - p["t"], 3))
+                    pred_f.write(json.dumps(self._finalise(p)) + "\n")
+                pending = []
+                sess.reset(keep_ids=True)  # never reuse track IDs within a run (new shot = new people)
             res = sess.process(frame, fidx, t, time.time() * 1000, None, "dataset_replay" if is_scene else "server", 0.0, 0)
             cam_moving = bool(res.camera_motion and res.camera_motion.get("camera_moving"))
             frames_f.write(json.dumps({"t": round(t, 3), "frame": fidx, "tracks": sum(x.state == "confirmed" for x in res.tracks),
@@ -246,13 +266,12 @@ class EvaluationRun:
                 dtp = t - p["t"]
                 if dtp <= 1e-9:
                     continue
-                if cam_moving:
-                    p["cam_frames"] += 1
-                p["future_frames"] += 1
+                p["cam_hist"].append((round(dtp, 3), cam_moving))
                 if p["track_id"] in matched:
                     u, v, gx, gy, pid = matched[p["track_id"]]
                     if is_scene and p.get("pid") is not None and pid != p["pid"]:
                         p["flags"].add("id_switch")
+                        p["events"].setdefault("id_switch", round(dtp, 3))
                     w = (u, v) if p["coord"] == "image_pixels" else (gx, gy)
                     p["gt"].append([round(dtp, 3), float(w[0]), float(w[1])])
                 elif all(x.track_id != p["track_id"] for x in sess.tracker.tracks):
@@ -273,15 +292,34 @@ class EvaluationRun:
             if t + 1e-6 >= next_pred_t:
                 next_pred_t += interval
                 elig = {o["id"] for o in sess.last_outs if o["tr"].state == "confirmed" and o["tr"].matched_this_frame}
-                outs_by_model, lat = {}, {}
+                outs_by_model, lat, errors = {}, {}, {}
                 for m in models:
                     t0 = time.perf_counter()
-                    res_m, _ = sess.forecast_now(m, hmax, 5, elig)
+                    try:
+                        res_m, _ = sess.forecast_now(m, hmax, 5, elig)
+                    except Exception as ex:  # counted as a forecast failure of this model, not a silent skip
+                        res_m = {}
+                        errors[m] = f"{type(ex).__name__}: {ex}"
                     lat[m] = (time.perf_counter() - t0) * 1000 / max(len(res_m), 1)
                     outs_by_model[m] = res_m
                 for o in sess.last_outs:
                     tid = o["id"]
-                    if tid not in elig or not all(tid in outs_by_model[m] for m in models):
+                    if tid not in elig:
+                        continue
+                    n_eligible += 1
+                    missing = [m for m in models if tid not in outs_by_model[m]]
+                    if missing:  # no sample for ANY model (paired comparison stays on identical samples)
+                        failures["count"] += 1
+                        short = len(o["kin"].history) < 3 or o["k"] is None
+                        reasons = sorted({f"model_error:{m}" if m in errors else ("insufficient_history" if short else f"no_forecast:{m}")
+                                          for m in missing})
+                        for r in reasons:
+                            failures["by_reason"][r] += 1
+                        for m in missing:
+                            failures["by_model"][m] += 1
+                        if len(failures["examples"]) < 200:
+                            failures["examples"].append({"track_id": tid, "t": round(t, 3), "frame": fidx, "reasons": reasons,
+                                                         **({"errors": {m: errors[m] for m in missing if m in errors}} if errors else {})})
                         continue
                     kin = o["kin"]
                     obs, nv = kin.resampled()
@@ -300,7 +338,7 @@ class EvaluationRun:
                         "causality": {"latest_frame_t_used": round(t, 3), "forecast_generated_before_future_frames": True},
                         "models": {m: {**compact(outs_by_model[m][tid]), "latency_ms": round(lat[m], 3)} for m in models},
                         "gt": [[0.0, *(o["foot"] if sess.last_coord == "image_pixels" else [float(kin.kf.x[0]), float(kin.kf.x[1])])]],
-                        "flags": set(), "future_frames": 0, "cam_frames": 0,
+                        "flags": set(), "events": {}, "cam_hist": [],
                     }
                     if is_scene and tid in matched:
                         rec["pid"] = matched[tid][4]
@@ -316,6 +354,9 @@ class EvaluationRun:
         meta["video"] = self.video_info
         meta["processed_until_s"] = t_last
         meta["n_predictions"] = n_pred
+        meta["forecast_failures"] = {"count": failures["count"], "n_eligible": n_eligible,
+                                     "by_reason": dict(failures["by_reason"]), "by_model": dict(failures["by_model"]),
+                                     "examples": failures["examples"]}
         (self.dir / "run.json").write_text(json.dumps(meta, indent=2))
         (self.dir / "tracks.json").write_text(json.dumps({str(k): v for k, v in obs_px.items()}))
         if not (self.dir / "flags.json").exists():
@@ -326,19 +367,37 @@ class EvaluationRun:
         summarise(self.dir)
 
     def _finalise(self, p: dict) -> dict:
-        """Quality-gate the observed future and score every model at every horizon."""
+        """Quality-gate the observed future and score every model at every horizon.
+
+        Quality events (camera cut, ID switch, implausible speed jump, camera motion) only exclude a
+        horizon if they affect the ground truth used to score it: an event at relative time e excludes
+        horizon h when e <= the first observed future time >= h (the last point used for interpolation).
+        """
         gt = np.asarray(p["gt"], float)
         flags = set(p["flags"])
-        if p["future_frames"] and p["cam_frames"] / p["future_frames"] > QUALITY_RULES["camera_motion_fraction"]:
-            flags.add("camera_motion")
+        events = dict(p.get("events", {}))
         if len(gt) >= 2:
             d = np.linalg.norm(np.diff(gt[:, 1:], axis=0), axis=-1) / np.maximum(np.diff(gt[:, 0]), 1e-3)
             lim = QUALITY_RULES["max_speed_m_s"] if p["coord"] == "ground_plane_meters" else QUALITY_RULES["max_speed_bh_s"] * p["body_px"]
-            if (d > lim).any():
+            jumps = np.flatnonzero(d > lim)
+            if len(jumps):
                 flags.add("possible_id_switch")
+                events["possible_id_switch"] = round(float(gt[jumps[0] + 1, 0]), 3)  # first implausible observation
+        cam = p.get("cam_hist", [])
         p["evaluations"] = {}
+        cam_frac = {}
         for h in p["horizons"]:
-            reasons = sorted(flags & {"camera_cut", "possible_id_switch", "id_switch", "camera_motion", "low_tracker_confidence"})
+            later = gt[gt[:, 0] >= h - 1e-6][:1, 0] if len(gt) else gt[:0, 0]
+            h_used = float(later[0]) if len(later) else float(h)
+            reasons = [k for k, e in events.items() if e <= h_used + 1e-6]
+            if "low_tracker_confidence" in flags:
+                reasons.append("low_tracker_confidence")
+            win = [mv for dt, mv in cam if dt <= h_used + 1e-6]
+            frac = sum(win) / len(win) if win else 0.0
+            cam_frac[str(h)] = round(frac, 3)
+            if frac > QUALITY_RULES["camera_motion_fraction"]:
+                reasons.append("camera_motion")
+                flags.add("camera_motion")
             covered = gt[gt[:, 0] <= h + 1e-6] if len(gt) else gt
             if len(gt) == 0 or gt[-1, 0] < h - 0.15:
                 reasons.append("recording_ended" if "recording_ended" in flags else ("track_lost" if "track_lost" in flags else "insufficient_ground_truth"))
@@ -351,8 +410,10 @@ class EvaluationRun:
             for m, mo in p["models"].items():
                 sc[m] = score_forecast(mo, gt[:, 0], gt[:, 1:], h, p["coord"], p["body_px"])
             p["evaluations"][str(h)] = {"included": True, "scores": sc}
-        out = {k: v for k, v in p.items() if k not in ("cam_frames", "future_frames")}
+        out = {k: v for k, v in p.items() if k not in ("cam_hist", "events")}
         out["flags"] = sorted(flags)
+        out["quality_events"] = events  # relative time (s after prediction) of the first occurrence
+        out["camera_moving_fraction"] = cam_frac  # per horizon, over future frames up to that horizon
         out["actual_future"] = p["gt"]
         out.pop("gt")
         return out

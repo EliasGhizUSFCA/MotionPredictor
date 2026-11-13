@@ -32,6 +32,8 @@ class KinematicTrack:
     def update(self, t: float, z: np.ndarray, r: float | None = None, q: float | None = None) -> None:
         if q is not None:
             self.kf.q = q
+        if self.last_t is not None and t < self.last_t:  # never let time run backwards inside a track
+            t = self.last_t
         if self.kf.x is None:
             self.kf.init(z, pos_var=r, vel_var=(5 * self.scale) ** 2, acc_var=(5 * self.scale) ** 2)
         else:
@@ -44,7 +46,7 @@ class KinematicTrack:
 
     def coast(self, t: float) -> None:
         """Advance prediction without a measurement (track temporarily lost)."""
-        if self.kf.x is None or self.last_t is None:
+        if self.kf.x is None or self.last_t is None or t <= self.last_t:
             return
         self.kf.predict(t - self.last_t)
         self.last_t = t
@@ -94,7 +96,9 @@ class KinematicTrack:
         ys = np.interp(ts, h[:, 0], h[:, 2])
         out = np.stack([xs, ys], -1)
         nv = int(valid.sum())
-        if nv < n:
+        if nv == 0:  # t_now before the first observation: nothing valid, pad with the latest point
+            out[:] = h[-1, 1:]
+        elif nv < n:
             out[: n - nv] = out[n - nv]
         return out, nv
 
