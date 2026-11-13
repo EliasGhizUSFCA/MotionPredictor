@@ -1,0 +1,543 @@
+{
+ "run_id": "examples-zara1",
+ "coordinate_system": "ground_plane_meters",
+ "unit": "m",
+ "normalised_unit": null,
+ "ground_truth": "human annotations (ETH/UCY)",
+ "models": [
+  "baseline",
+  "learned"
+ ],
+ "horizons": [
+  1.0,
+  3.0
+ ],
+ "n_predictions": 140,
+ "inclusion": {
+  "1.0": {
+   "included": 125,
+   "track_lost": 9,
+   "recording_ended": 6,
+   "forecast_failed": 10
+  },
+  "3.0": {
+   "included": 99,
+   "insufficient_ground_truth": 9,
+   "track_lost": 18,
+   "recording_ended": 14,
+   "forecast_failed": 10
+  }
+ },
+ "flagged_tracks_excluded": [],
+ "forecast_failures": {
+  "count": 10,
+  "by_reason": {
+   "insufficient_history": 10
+  },
+  "by_model": {
+   "baseline": 10,
+   "learned": 10
+  },
+  "n_eligible": 150
+ },
+ "scene_in_active_model_training": false,
+ "per_model_horizon": {
+  "baseline@1.0": {
+   "n": 125,
+   "ade_top1": {
+    "mean": 0.04543731178104273,
+    "median": 0.03046620972771097,
+    "p50": 0.03046620972771097,
+    "p90": 0.10213968284045591,
+    "n": 125
+   },
+   "fde_top1": {
+    "mean": 0.09106182379607847,
+    "median": 0.07056681468997449,
+    "p50": 0.07056681468997449,
+    "p90": 0.20748524825706696,
+    "n": 125
+   },
+   "min_ade": {
+    "mean": 0.04543731178104273,
+    "median": 0.03046620972771097,
+    "p50": 0.03046620972771097,
+    "p90": 0.10213968284045591,
+    "n": 125
+   },
+   "min_fde": {
+    "mean": 0.09106182379607847,
+    "median": 0.07056681468997449,
+    "p50": 0.07056681468997449,
+    "p90": 0.20748524825706696,
+    "n": 125
+   },
+   "w_ade": null,
+   "w_fde": null,
+   "nll_final": {
+    "mean": -0.9309405854726887,
+    "median": -1.0211836578091997,
+    "p50": -1.0211836578091997,
+    "p90": -0.6755138034061313,
+    "n": 125
+   },
+   "forecast_failure_rate": 0.06666666666666667,
+   "miss_rate_top1": 0.0,
+   "miss_rate_k": 0.0,
+   "coverage50": 0.944,
+   "coverage90": 1.0,
+   "latency_ms": 2.8300080000000007,
+   "k": 1,
+   "probability_type": "none",
+   "calibration_status": "not_applicable",
+   "reliability": {
+    "available": false
+   }
+  },
+  "learned@1.0": {
+   "n": 125,
+   "ade_top1": {
+    "mean": 0.05326488578180791,
+    "median": 0.04082896896051659,
+    "p50": 0.04082896896051659,
+    "p90": 0.11681960398209873,
+    "n": 125
+   },
+   "fde_top1": {
+    "mean": 0.10364688405791088,
+    "median": 0.08027706464646238,
+    "p50": 0.08027706464646238,
+    "p90": 0.22484505423340195,
+    "n": 125
+   },
+   "min_ade": {
+    "mean": 0.03387672737359437,
+    "median": 0.025949002281357846,
+    "p50": 0.025949002281357846,
+    "p90": 0.062325477235347836,
+    "n": 125
+   },
+   "min_fde": {
+    "mean": 0.060986862856186236,
+    "median": 0.048289117595400825,
+    "p50": 0.048289117595400825,
+    "p90": 0.10672465735982098,
+    "n": 125
+   },
+   "w_ade": {
+    "mean": 0.06998694990853406,
+    "median": 0.057297520297366275,
+    "p50": 0.057297520297366275,
+    "p90": 0.11817394386774682,
+    "n": 125
+   },
+   "w_fde": {
+    "mean": 0.13546396496558022,
+    "median": 0.11993263315992911,
+    "p50": 0.11993263315992911,
+    "p90": 0.22625083523212525,
+    "n": 125
+   },
+   "nll_final": {
+    "mean": -2.2227945337627415,
+    "median": -2.4999092883778324,
+    "p50": -2.4999092883778324,
+    "p90": -0.5064624998469599,
+    "n": 125
+   },
+   "forecast_failure_rate": 0.06666666666666667,
+   "miss_rate_top1": 0.0,
+   "miss_rate_k": 0.0,
+   "coverage50": 0.664,
+   "coverage90": 0.952,
+   "latency_ms": 5.860664000000001,
+   "k": 5,
+   "probability_type": "uncalibrated_weight",
+   "calibration_status": "uncalibrated: held-out top-mode ECE 0.190 >= 0.1",
+   "reliability": {
+    "available": true,
+    "ece": 0.01635815752744675,
+    "bins": [
+     {
+      "lo": 0.0,
+      "hi": 0.1,
+      "n": 51,
+      "confidence": 0.084656790191052,
+      "frequency": 0.0196078431372549
+     },
+     {
+      "lo": 0.1,
+      "hi": 0.2,
+      "n": 222,
+      "confidence": 0.1596805165681216,
+      "frequency": 0.15315315315315314
+     },
+     {
+      "lo": 0.2,
+      "hi": 0.30000000000000004,
+      "n": 327,
+      "confidence": 0.23226635536287174,
+      "frequency": 0.23853211009174313
+     }
+    ],
+    "n_mode_predictions": 625,
+    "brier_like": 0.15136595118723653
+   }
+  },
+  "baseline@3.0": {
+   "n": 99,
+   "ade_top1": {
+    "mean": 0.2211102690886216,
+    "median": 0.1699816157730506,
+    "p50": 0.1699816157730506,
+    "p90": 0.4884646861204917,
+    "n": 99
+   },
+   "fde_top1": {
+    "mean": 0.5143749350278382,
+    "median": 0.37035028702823314,
+    "p50": 0.37035028702823314,
+    "p90": 1.0940728354550961,
+    "n": 99
+   },
+   "min_ade": {
+    "mean": 0.2211102690886216,
+    "median": 0.1699816157730506,
+    "p50": 0.1699816157730506,
+    "p90": 0.4884646861204917,
+    "n": 99
+   },
+   "min_fde": {
+    "mean": 0.5143749350278382,
+    "median": 0.37035028702823314,
+    "p50": 0.37035028702823314,
+    "p90": 1.0940728354550961,
+    "n": 99
+   },
+   "w_ade": null,
+   "w_fde": null,
+   "nll_final": {
+    "mean": 1.6560341333020498,
+    "median": 1.3830269955332803,
+    "p50": 1.3830269955332803,
+    "p90": 2.330485900321947,
+    "n": 99
+   },
+   "forecast_failure_rate": 0.06666666666666667,
+   "miss_rate_top1": 0.0,
+   "miss_rate_k": 0.0,
+   "coverage50": 0.8383838383838383,
+   "coverage90": 0.9494949494949495,
+   "latency_ms": 3.0109292929292932,
+   "k": 1,
+   "probability_type": "none",
+   "calibration_status": "not_applicable",
+   "reliability": {
+    "available": false
+   }
+  },
+  "learned@3.0": {
+   "n": 99,
+   "ade_top1": {
+    "mean": 0.23266674874678864,
+    "median": 0.19345580649972044,
+    "p50": 0.19345580649972044,
+    "p90": 0.4108183195476297,
+    "n": 99
+   },
+   "fde_top1": {
+    "mean": 0.5212454886827078,
+    "median": 0.42160110808022166,
+    "p50": 0.42160110808022166,
+    "p90": 0.9373329606199653,
+    "n": 99
+   },
+   "min_ade": {
+    "mean": 0.14185888282217132,
+    "median": 0.11068453973329082,
+    "p50": 0.11068453973329082,
+    "p90": 0.30168431234386006,
+    "n": 99
+   },
+   "min_fde": {
+    "mean": 0.3020626504886338,
+    "median": 0.2547602768647591,
+    "p50": 0.2547602768647591,
+    "p90": 0.563231273685755,
+    "n": 99
+   },
+   "w_ade": {
+    "mean": 0.31273974845371694,
+    "median": 0.2716060619101809,
+    "p50": 0.2716060619101809,
+    "p90": 0.5526801831346573,
+    "n": 99
+   },
+   "w_fde": {
+    "mean": 0.7159974519109189,
+    "median": 0.6279169872429877,
+    "p50": 0.6279169872429877,
+    "p90": 1.2183523105434027,
+    "n": 99
+   },
+   "nll_final": {
+    "mean": 1.0622393678341575,
+    "median": 0.789286778771543,
+    "p50": 0.789286778771543,
+    "p90": 3.321349498628173,
+    "n": 99
+   },
+   "forecast_failure_rate": 0.06666666666666667,
+   "miss_rate_top1": 0.010101010101010102,
+   "miss_rate_k": 0.0,
+   "coverage50": 0.5050505050505051,
+   "coverage90": 0.898989898989899,
+   "latency_ms": 6.188777777777777,
+   "k": 5,
+   "probability_type": "uncalibrated_weight",
+   "calibration_status": "uncalibrated: held-out top-mode ECE 0.190 >= 0.1",
+   "reliability": {
+    "available": true,
+    "ece": 0.017303982482414052,
+    "bins": [
+     {
+      "lo": 0.0,
+      "hi": 0.1,
+      "n": 40,
+      "confidence": 0.08592121992260218,
+      "frequency": 0.0
+     },
+     {
+      "lo": 0.1,
+      "hi": 0.2,
+      "n": 176,
+      "confidence": 0.160268572836437,
+      "frequency": 0.16477272727272727
+     },
+     {
+      "lo": 0.2,
+      "hi": 0.30000000000000004,
+      "n": 261,
+      "confidence": 0.2327353122476417,
+      "frequency": 0.23754789272030652
+     }
+    ],
+    "n_mode_predictions": 495,
+    "brier_like": 0.15075876690946943
+   }
+  }
+ },
+ "paired_comparison": {
+  "1.0": {
+   "comparison": "learned minus baseline (negative = learned better)",
+   "ade_top1": {
+    "mean_diff": 0.007827574000765175,
+    "ci95": [
+     0.002223987049304234,
+     0.01357652952478281
+    ],
+    "n_pairs": 125
+   },
+   "fde_top1": {
+    "mean_diff": 0.012585060261832435,
+    "ci95": [
+     0.0018516666867055994,
+     0.023268953866725617
+    ],
+    "n_pairs": 125
+   },
+   "unit": "m"
+  },
+  "3.0": {
+   "comparison": "learned minus baseline (negative = learned better)",
+   "ade_top1": {
+    "mean_diff": 0.011556479658167022,
+    "ci95": [
+     -0.014206402482746825,
+     0.03538581934483146
+    ],
+    "n_pairs": 99
+   },
+   "fde_top1": {
+    "mean_diff": 0.006870553654869714,
+    "ci95": [
+     -0.05649440508894463,
+     0.06377539544926608
+    ],
+    "n_pairs": 99
+   },
+   "unit": "m"
+  }
+ },
+ "per_track": [
+  {
+   "model": "baseline",
+   "track_id": 1,
+   "n": 7,
+   "mean_fde": 0.5597214585009995
+  },
+  {
+   "model": "learned",
+   "track_id": 1,
+   "n": 7,
+   "mean_fde": 0.5712955758555543
+  },
+  {
+   "model": "baseline",
+   "track_id": 2,
+   "n": 7,
+   "mean_fde": 0.4682882562631495
+  }
+ ],
+ "failure_cases": [
+  {
+   "prediction_id": "examples-zara1-000031",
+   "track_id": 6,
+   "t": 4.1,
+   "horizon": 3.0,
+   "fde_top1": 2.062183018766934,
+   "top_id": "B",
+   "best_id": "E"
+  },
+  {
+   "prediction_id": "examples-zara1-000094",
+   "track_id": 9,
+   "t": 11.1,
+   "horizon": 3.0,
+   "fde_top1": 1.8783980845890094,
+   "top_id": "B",
+   "best_id": "D"
+  },
+  {
+   "prediction_id": "examples-zara1-000040",
+   "track_id": 6,
+   "t": 5.1,
+   "horizon": 3.0,
+   "fde_top1": 1.8669088332883355,
+   "top_id": "B",
+   "best_id": "E"
+  }
+ ],
+ "best_cases": [
+  {
+   "prediction_id": "examples-zara1-000104",
+   "track_id": 9,
+   "t": 13.1,
+   "horizon": 3.0,
+   "fde_top1": 0.004035039954435477,
+   "top_id": "D",
+   "best_id": "D"
+  },
+  {
+   "prediction_id": "examples-zara1-000108",
+   "track_id": 9,
+   "t": 14.1,
+   "horizon": 3.0,
+   "fde_top1": 0.016484283985450363,
+   "top_id": "B",
+   "best_id": "B"
+  },
+  {
+   "prediction_id": "examples-zara1-000021",
+   "track_id": 5,
+   "t": 3.1,
+   "horizon": 3.0,
+   "fde_top1": 0.02300637610010971,
+   "top_id": "B",
+   "best_id": "B"
+  }
+ ],
+ "selected_horizon_for_rankings": 3.0,
+ "ranking_metric": "fde_top1",
+ "tracking_over_time": [
+  {
+   "t": 0.1,
+   "frame": 1,
+   "tracks": 8,
+   "detections": 8,
+   "camera_moving": false,
+   "cut": false,
+   "mean_tracker_conf": 0.594,
+   "processing_ms": 2.4
+  },
+  {
+   "t": 0.2,
+   "frame": 2,
+   "tracks": 8,
+   "detections": 8,
+   "camera_moving": false,
+   "cut": false,
+   "mean_tracker_conf": 0.693,
+   "processing_ms": 4.76
+  },
+  {
+   "t": 0.3,
+   "frame": 3,
+   "tracks": 8,
+   "detections": 8,
+   "camera_moving": false,
+   "cut": false,
+   "mean_tracker_conf": 0.792,
+   "processing_ms": 33.93
+  }
+ ],
+ "heatmap": {
+  "grid": {
+   "nx": 12,
+   "ny": 8,
+   "x0": 0,
+   "x1": 704,
+   "y0": 0,
+   "y1": 590,
+   "space": "image pixels (start position)"
+  },
+  "unit": "m",
+  "min_samples_to_display": 3,
+  "cells": [
+   {
+    "model": "baseline",
+    "horizon": 1.0,
+    "i": 8,
+    "j": 5,
+    "n": 6,
+    "n_total": 6,
+    "mean_fde": 0.12665170183405286,
+    "exclusion_rate": 0.0,
+    "mean_turn_deg": 11.410648703591555
+   },
+   {
+    "model": "learned",
+    "horizon": 1.0,
+    "i": 8,
+    "j": 5,
+    "n": 6,
+    "n_total": 6,
+    "mean_fde": 0.13651946107149776,
+    "exclusion_rate": 0.0,
+    "mean_turn_deg": 11.410648703591555
+   },
+   {
+    "model": "baseline",
+    "horizon": 3.0,
+    "i": 8,
+    "j": 5,
+    "n": 5,
+    "n_total": 6,
+    "mean_fde": 0.7035792085387741,
+    "exclusion_rate": 0.16666666666666666,
+    "mean_turn_deg": 11.410648703591555
+   }
+  ]
+ },
+ "metric_definitions": {
+  "ade_top1": "mean distance of the highest-probability (or only) path to the actual path",
+  "fde_top1": "distance at the horizon for the highest-probability path",
+  "min_ade/min_fde": "best of K hypotheses chosen with hindsight (oracle) - not a model choice",
+  "w_ade/w_fde": "probability-weighted ADE / FDE (learned model only)",
+  "forecast_failure_rate": "eligible tracks (confirmed and detected at the prediction time) for which this model returned no forecast or raised; such tracks yield no sample for any model",
+  "miss_rate": "FDE > 2.0 m",
+  "nll_final": "negative log-likelihood of the actual final position (lower is better; same coordinate system only)",
+  "coverage50/90": "fraction of actual final positions inside the 50%/90% predicted region"
+ },
+ "note": "Example summary from an evaluation run on the annotated zara1 scene (20 s, held out from the active model). Long lists truncated to 3 entries for brevity."
+}

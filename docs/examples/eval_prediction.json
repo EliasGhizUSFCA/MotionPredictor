@@ -1,0 +1,494 @@
+{
+ "id": "examples-zara1-000000",
+ "track_id": 1,
+ "object_class": "person",
+ "t": 1.1,
+ "frame": 11,
+ "coord": "ground_plane_meters",
+ "hmax": 3.0,
+ "horizons": [
+  1.0,
+  3.0
+ ],
+ "body_px": 16.0,
+ "start_px": [
+  527.4,
+  377.3
+ ],
+ "start": [
+  12.04462638234477,
+  3.9523197289500325
+ ],
+ "observation_window": {
+  "dt_s": 0.4,
+  "steps": 3,
+  "positions": [
+   [
+    13.064,
+    3.938
+   ],
+   [
+    12.55,
+    3.938
+   ],
+   [
+    12.045,
+    3.952
+   ]
+  ]
+ },
+ "history_px": [
+  [
+   578.4,
+   377.9,
+   -1.0
+  ],
+  [
+   573.3,
+   377.9,
+   -0.9
+  ],
+  [
+   568.1,
+   377.9,
+   -0.8
+  ]
+ ],
+ "track_quality": {
+  "age_s": 1.0,
+  "hits": 11,
+  "tracker_confidence": 0.99,
+  "det_confidence": 0.99
+ },
+ "camera_moving_at_t": false,
+ "causality": {
+  "latest_frame_t_used": 1.1,
+  "forecast_generated_before_future_frames": true
+ },
+ "models": {
+  "baseline": {
+   "prediction_source": "physics_baseline",
+   "model_version": "kalman-cv/ca-v1",
+   "probability_type": "none",
+   "calibration_status": "not_applicable",
+   "history_steps_used": 3,
+   "trajectories": [
+    {
+     "id": "CV",
+     "rank": 0,
+     "probability": null,
+     "times": [
+      0.0,
+      0.2,
+      0.4
+     ],
+     "points": [
+      [
+       12.0446,
+       3.9523
+      ],
+      [
+       11.7945,
+       3.964
+      ],
+      [
+       11.5444,
+       3.9758
+      ]
+     ],
+     "image_points": [
+      [
+       527.4,
+       377.4
+      ],
+      [
+       517.4,
+       376.9
+      ],
+      [
+       507.4,
+       376.4
+      ]
+     ],
+     "sigma": [
+      [
+       0.0251,
+       0.0251,
+       1.571
+      ],
+      [
+       0.0613,
+       0.0613,
+       1.571
+      ],
+      [
+       0.1021,
+       0.1021,
+       1.571
+      ]
+     ]
+    },
+    {
+     "id": "CA",
+     "rank": 1,
+     "probability": null,
+     "times": [
+      0.0,
+      0.2,
+      0.4
+     ],
+     "points": [
+      [
+       12.0446,
+       3.9523
+      ],
+      [
+       11.7959,
+       3.9664
+      ],
+      [
+       11.5499,
+       3.9854
+      ]
+     ],
+     "image_points": [
+      [
+       527.4,
+       377.4
+      ],
+      [
+       517.4,
+       376.8
+      ],
+      [
+       507.6,
+       376.0
+      ]
+     ],
+     "sigma": [
+      [
+       0.0,
+       0.0,
+       0.0
+      ],
+      [
+       0.0,
+       0.0,
+       0.0
+      ],
+      [
+       0.0,
+       0.0,
+       0.0
+      ]
+     ]
+    }
+   ],
+   "latency_ms": 3.562
+  },
+  "learned": {
+   "prediction_source": "trained_model",
+   "model_version": "socialmdn-zara1-holdout-v1",
+   "probability_type": "uncalibrated_weight",
+   "calibration_status": "uncalibrated: held-out top-mode ECE 0.190 >= 0.1",
+   "history_steps_used": 3,
+   "trajectories": [
+    {
+     "id": "B",
+     "rank": 0,
+     "probability": 0.29082217812538147,
+     "times": [
+      0.0,
+      0.2,
+      0.4
+     ],
+     "points": [
+      [
+       12.0446,
+       3.9523
+      ],
+      [
+       11.7998,
+       3.9677
+      ],
+      [
+       11.5549,
+       3.983
+      ]
+     ],
+     "image_points": [
+      [
+       527.4,
+       377.4
+      ],
+      [
+       517.6,
+       376.8
+      ],
+      [
+       507.8,
+       376.1
+      ]
+     ],
+     "sigma": [
+      [
+       0.001,
+       0.001,
+       1.571
+      ],
+      [
+       0.0192,
+       0.0192,
+       3.127
+      ],
+      [
+       0.0271,
+       0.0271,
+       3.127
+      ]
+     ]
+    },
+    {
+     "id": "D",
+     "rank": 1,
+     "probability": 0.22381378710269928,
+     "times": [
+      0.0,
+      0.2,
+      0.4
+     ],
+     "points": [
+      [
+       12.0446,
+       3.9523
+      ],
+      [
+       11.8036,
+       3.9698
+      ],
+      [
+       11.5627,
+       3.9873
+      ]
+     ],
+     "image_points": [
+      [
+       527.4,
+       377.4
+      ],
+      [
+       517.7,
+       376.7
+      ],
+      [
+       508.1,
+       376.0
+      ]
+     ],
+     "sigma": [
+      [
+       0.001,
+       0.001,
+       1.571
+      ],
+      [
+       0.0197,
+       0.0193,
+       3.127
+      ],
+      [
+       0.0279,
+       0.0272,
+       3.127
+      ]
+     ]
+    },
+    {
+     "id": "A",
+     "rank": 2,
+     "probability": 0.2106766700744629,
+     "times": [
+      0.0,
+      0.2,
+      0.4
+     ],
+     "points": [
+      [
+       12.0446,
+       3.9523
+      ],
+      [
+       11.7972,
+       3.9807
+      ],
+      [
+       11.5497,
+       4.0091
+      ]
+     ],
+     "image_points": [
+      [
+       527.4,
+       377.4
+      ],
+      [
+       517.5,
+       376.2
+      ],
+      [
+       507.6,
+       375.1
+      ]
+     ],
+     "sigma": [
+      [
+       0.001,
+       0.001,
+       1.571
+      ],
+      [
+       0.0205,
+       0.0195,
+       1.557
+      ],
+      [
+       0.029,
+       0.0275,
+       1.557
+      ]
+     ]
+    }
+   ],
+   "latency_ms": 8.059
+  }
+ },
+ "flags": [],
+ "pid": 1,
+ "evaluations": {
+  "1.0": {
+   "included": true,
+   "scores": {
+    "baseline": {
+     "n_eval_points": 5,
+     "ade_top1": 0.020587800989062554,
+     "fde_top1": 0.02990066294680068,
+     "min_ade": 0.020587800989062554,
+     "min_fde": 0.02990066294680068,
+     "k": 1,
+     "w_ade": null,
+     "w_fde": null,
+     "miss_top1": false,
+     "miss_k": false,
+     "nll_final": -1.0545931506606423,
+     "in_hdr50": true,
+     "in_hdr90": true,
+     "top_id": "CV",
+     "top_prob": null,
+     "best_id": "CV",
+     "mode_probs": null,
+     "miss_threshold": 2.0
+    },
+    "learned": {
+     "n_eval_points": 5,
+     "ade_top1": 0.013640486657933751,
+     "fde_top1": 0.027947279180291877,
+     "min_ade": 0.013640486657933751,
+     "min_fde": 0.027947279180291877,
+     "k": 5,
+     "w_ade": 0.033470217258044985,
+     "w_fde": 0.06564600560188966,
+     "miss_top1": false,
+     "miss_k": false,
+     "nll_final": -3.5572135763402786,
+     "in_hdr50": true,
+     "in_hdr90": true,
+     "top_id": "B",
+     "top_prob": 0.29082217812538147,
+     "best_id": "B",
+     "mode_probs": {
+      "B": 0.29082217812538147,
+      "D": 0.22381378710269928,
+      "A": 0.2106766700744629,
+      "E": 0.1861925572156906,
+      "C": 0.08849478513002396
+     },
+     "miss_threshold": 2.0
+    }
+   }
+  },
+  "3.0": {
+   "included": true,
+   "scores": {
+    "baseline": {
+     "n_eval_points": 15,
+     "ade_top1": 0.25794871380618567,
+     "fde_top1": 0.7251792086775515,
+     "min_ade": 0.25794871380618567,
+     "min_fde": 0.7251792086775515,
+     "k": 1,
+     "w_ade": null,
+     "w_fde": null,
+     "miss_top1": false,
+     "miss_k": false,
+     "nll_final": 1.733663262223274,
+     "in_hdr50": true,
+     "in_hdr90": true,
+     "top_id": "CV",
+     "top_prob": null,
+     "best_id": "CV",
+     "mode_probs": null,
+     "miss_threshold": 2.0
+    },
+    "learned": {
+     "n_eval_points": 15,
+     "ade_top1": 0.32281879352536724,
+     "fde_top1": 0.8888821824998044,
+     "min_ade": 0.13722510627793164,
+     "min_fde": 0.39221681704790456,
+     "k": 5,
+     "w_ade": 0.3457321809134913,
+     "w_fde": 0.9400561936621991,
+     "miss_top1": false,
+     "miss_k": false,
+     "nll_final": 2.835933277779707,
+     "in_hdr50": false,
+     "in_hdr90": true,
+     "top_id": "B",
+     "top_prob": 0.29082217812538147,
+     "best_id": "E",
+     "mode_probs": {
+      "B": 0.29082217812538147,
+      "D": 0.22381378710269928,
+      "A": 0.2106766700744629,
+      "E": 0.1861925572156906,
+      "C": 0.08849478513002396
+     },
+     "miss_threshold": 2.0
+    }
+   }
+  }
+ },
+ "quality_events": {},
+ "camera_moving_fraction": {
+  "1.0": 0.0,
+  "3.0": 0.0
+ },
+ "actual_future": [
+  [
+   0.0,
+   12.04462638234477,
+   3.9523197289500325
+  ],
+  [
+   0.1,
+   11.9192705534,
+   3.95769545865
+  ],
+  [
+   0.2,
+   11.796516778225,
+   3.9676595052874997
+  ]
+ ],
+ "note": "Example stored evaluation prediction (zara1 dataset run). Arrays truncated to 3 entries for brevity."
+}
