@@ -1,0 +1,18 @@
+# SocialMDN forecaster configuration (see backend/motionpredict/forecasting/model.py)
+model:
+  hidden: 96
+  num_modes: 5
+  social: true
+  min_sigma: 0.03
+  dropout: 0.1
+training:
+  epochs: 40
+  batch_size: 256
+  lr: 0.002
+  weight_decay: 0.0001
+  wta_weight: 1.0
+  train_frac: 0.8           # temporal train/val split inside each training scene
+  short_history_prob: 0.3   # randomly truncate observed history so short live tracks work
+baseline:
+  kalman_q: 0.5             # white-noise acceleration PSD (m^2/s^3)
+  kalman_r: 0.01            # measurement variance (m^2)

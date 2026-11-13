@@ -1,0 +1,19 @@
+Metadata-Version: 2.4
+Name: motionpredict
+Version: 0.1.0
+Summary: MotionPredict AI - real-time pedestrian detection, tracking and probabilistic trajectory forecasting
+Requires-Python: >=3.11
+Requires-Dist: numpy>=1.26
+Requires-Dist: scipy>=1.11
+Requires-Dist: opencv-python-headless>=4.9
+Requires-Dist: torch>=2.2
+Requires-Dist: ultralytics>=8.3
+Requires-Dist: fastapi>=0.110
+Requires-Dist: uvicorn[standard]>=0.29
+Requires-Dist: pydantic>=2.6
+Requires-Dist: pyyaml>=6
+Provides-Extra: dev
+Requires-Dist: pytest>=8; extra == "dev"
+Requires-Dist: httpx>=0.27; extra == "dev"
+Provides-Extra: llm
+Requires-Dist: anthropic>=0.40; extra == "llm"
