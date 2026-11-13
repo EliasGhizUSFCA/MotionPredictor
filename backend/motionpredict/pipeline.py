@@ -144,13 +144,20 @@ class Session:
             ev.outputs = {"people_detected": len(hi), "low_score_candidates": len(dets) - len(hi),
                           "confidences": [round(d.confidence, 3) for d in hi][:10]}
             ev.confidence = float(np.mean([d.confidence for d in hi])) if hi else None
-        if not cfg.pose or not self.detector.is_pose:
-            for d in dets:
-                d.keypoints = None
-        rec.add(stage="pose", label="Pose estimation executed", status="ok" if (cfg.pose and self.detector.is_pose) else "skipped",
-                outputs={"people_with_keypoints": sum(d.keypoints is not None for d in hi), "keypoints_per_person": 17},
-                explanation="Computed in the same forward pass as detection (YOLO-pose): 17 body joints per person. "
-                            "Used for upright/full-body checks and the skeleton overlay. No face analysis.")
+        pose_on = cfg.pose and getattr(self.detector, "supports_pose", False)
+        run_pose = pose_on and self.frames_processed % cfg.pose_every == 0
+        with rec.stage("pose", "Pose estimation executed", {"model": getattr(self.detector, "pose_weights", None), "people": len(hi),
+                                                            "every_nth_frame": cfg.pose_every},
+                       "Estimates 17 body joints per detected person (separate YOLO-pose pass, matched to boxes). On frames in between, "
+                       "the last joints are carried along with the person's box for up to 0.6 s. Used for the skeleton overlay and the "
+                       "upright/full-body check for height. No face analysis.") as ev:
+            if run_pose:
+                n_kp = self.detector.pose(frame_bgr, hi, imgsz=cfg.imgsz)
+                ev.outputs = {"people_with_keypoints": n_kp, "keypoints_per_person": 17}
+            else:
+                ev.status = "skipped"
+                ev.outputs = {"reason": ("throttled: pose runs every %d frames" % cfg.pose_every) if pose_on
+                              else ("disabled" if not cfg.pose else "detector has no pose model")}
 
         # 2. tracking
         with rec.stage("tracker", "Tracker updated (ByteTrack)", {"detections": len(dets), "dt_s": round(dt, 4)},
@@ -227,7 +234,7 @@ class Session:
                 tracker_confidence=round(tr.confidence(t_s, self.tracker.track_buffer_s), 3),
                 bbox=[round(v, 1) for v in tr.kf.box.tolist()],
                 det_confidence=round(tr.det_conf, 3), footpoint_px=o["foot"],
-                keypoints=tr.keypoints if tr.matched_this_frame else None,
+                keypoints=tr.current_keypoints(t_s) if (tr.matched_this_frame and cfg.pose) else None,
                 history_px=o["hist_px"], history_world=o["hist_w"],
                 kinematics=o["k_px"], kinematics_world=o["k_w"], height=o["height"], forecast=f,
             ))
@@ -293,7 +300,7 @@ class Session:
             else:
                 st["w"] = None
             # height
-            hest = estimate_height(cal, box.tolist(), tr.keypoints if tr.matched_this_frame else None, W, H)
+            hest = estimate_height(cal, box.tolist(), tr.current_keypoints(t) if tr.matched_this_frame else None, W, H)
             if hest.status == "calibrated":
                 st["heights"].append((hest.meters, hest.interval_m))
             if st["heights"] and cal is not None and cal.camera_height_m:

@@ -78,11 +78,17 @@ class LockedDetector:
     def __init__(self, det):
         self._d = det
         self.weights = det.weights
+        self.pose_weights = getattr(det, "pose_weights", None)
         self.is_pose = det.is_pose
+        self.supports_pose = getattr(det, "supports_pose", False)
 
     def __call__(self, *a, **k):
         with S.detector_lock:
             return self._d(*a, **k)
+
+    def pose(self, *a, **k):
+        with S.detector_lock:
+            return self._d.pose(*a, **k)
 
 
 def init_models(load_detector: bool = True) -> None:
@@ -327,7 +333,10 @@ def eval_flag(run_id: str, body: dict) -> dict:
         raise HTTPException(400, "kind must be hard_case | inaccurate_track | annotation_correction | unflag")
     flags = json.loads((d / "flags.json").read_text())
     if kind == "unflag":
-        flags = [f for f in flags if not (f.get("prediction_id") == body.get("prediction_id") and f.get("track_id") == body.get("track_id"))]
+        if body.get("prediction_id"):
+            flags = [f for f in flags if f.get("prediction_id") != body["prediction_id"]]
+        else:
+            flags = [f for f in flags if not (f.get("track_id") == body.get("track_id") and f["kind"] == "inaccurate_track")]
     else:
         flags.append({"kind": kind, "prediction_id": body.get("prediction_id"), "track_id": body.get("track_id"),
                       "note": str(body.get("note", ""))[:500], "corrected_future": body.get("corrected_future"),

@@ -133,12 +133,12 @@ class PipelineConfig(BaseModel):
     det_iou: float = Field(0.5, ge=0.1, le=0.95)
     imgsz: int = Field(640, ge=160, le=1280)
     pose: bool = True
+    pose_every: int = Field(3, ge=1, le=30)  # run the pose model on every Nth processed frame
     forecaster: Literal["learned", "baseline"] = "learned"
     horizon_s: float = Field(3.0, ge=0.5, le=5.0)
     num_hypotheses: int = Field(3, ge=1, le=5)
     history_s: float = Field(6.0, ge=1.0, le=30.0)
     track_buffer_s: float = Field(1.0, ge=0.2, le=5.0)
-    track_high_thresh: float = Field(0.5, ge=0.1, le=0.95)
     camera_motion_check: bool = True
 
 

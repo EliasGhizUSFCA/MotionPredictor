@@ -61,6 +61,22 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+def _r(v, d):
+    return None if v is None or not math.isfinite(v) else round(float(v), d)
+
+
+def compact(f) -> dict:
+    """Stored form of a forecast: rounded, without the derived band polygons (rebuilt from sigma in the UI)."""
+    out = f.model_dump(include={"prediction_source", "model_version", "probability_type", "calibration_status", "history_steps_used"})
+    out["trajectories"] = [{
+        "id": t.id, "rank": t.rank, "probability": t.probability, "times": t.times,
+        "points": [[_r(x, 4), _r(y, 4)] for x, y in t.points],
+        "image_points": [[_r(x, 1), _r(y, 1)] for x, y in (t.image_points or [])],
+        "sigma": [[_r(a, 4), _r(b, 4), _r(c, 3)] for a, b, c in t.sigma],
+    } for t in f.trajectories]
+    return out
+
+
 class EvaluationRun:
     def __init__(self, root: Path, run_id: str | None = None):
         self.id = run_id or time.strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:6]
@@ -282,9 +298,7 @@ class EvaluationRun:
                                           "det_confidence": round(tr.det_conf, 3)},
                         "camera_moving_at_t": cam_moving,
                         "causality": {"latest_frame_t_used": round(t, 3), "forecast_generated_before_future_frames": True},
-                        "models": {m: {**outs_by_model[m][tid].model_dump(include={"prediction_source", "model_version", "probability_type",
-                                                                                     "calibration_status", "trajectories", "history_steps_used"}),
-                                       "latency_ms": round(lat[m], 3)} for m in models},
+                        "models": {m: {**compact(outs_by_model[m][tid]), "latency_ms": round(lat[m], 3)} for m in models},
                         "gt": [[0.0, *(o["foot"] if sess.last_coord == "image_pixels" else [float(kin.kf.x[0]), float(kin.kf.x[1])])]],
                         "flags": set(), "future_frames": 0, "cam_frames": 0,
                     }

@@ -1,0 +1,1339 @@
+{
+ "type": "result",
+ "schema_version": "1.0",
+ "session_id": "c4d9f30d18b2",
+ "frame_id": 59,
+ "source": "dataset_replay",
+ "client_ts_ms": null,
+ "server_received_ms": 1794599346657.374,
+ "server_done_ms": 1794599346687.7275,
+ "frame_width": 704,
+ "frame_height": 590,
+ "processing_ms": 30.35,
+ "tracks": [
+  {
+   "track_id": 1,
+   "state": "confirmed",
+   "age_s": 5.9,
+   "hits": 60,
+   "time_since_update_s": 0.0,
+   "tracker_confidence": 0.99,
+   "bbox": [
+    274.1,
+    395.2,
+    290.1,
+    411.2
+   ],
+   "det_confidence": 0.99,
+   "footpoint_px": [
+    282.0,
+    411.1
+   ],
+   "keypoints": null,
+   "history_px": [
+    [
+     303.7,
+     409.8,
+     -0.4
+    ],
+    [
+     298.3,
+     410.2,
+     -0.3
+    ],
+    [
+     292.9,
+     410.5,
+     -0.2
+    ],
+    [
+     287.4,
+     410.8,
+     -0.1
+    ],
+    [
+     282.0,
+     411.1,
+     0.0
+    ]
+   ],
+   "history_world": [
+    [
+     6.453,
+     3.141,
+     -0.4
+    ],
+    [
+     6.318,
+     3.132,
+     -0.3
+    ],
+    [
+     6.182,
+     3.124,
+     -0.2
+    ],
+    [
+     6.046,
+     3.117,
+     -0.1
+    ],
+    [
+     5.91,
+     3.11,
+     0.0
+    ]
+   ],
+   "kinematics": {
+    "units": "px",
+    "position": [
+     281.9727299224725,
+     411.07002069229503
+    ],
+    "velocity": [
+     -54.60583423275822,
+     2.661694456637649
+    ],
+    "speed": 54.67066626296011,
+    "heading_deg": 177.2093961761673,
+    "acceleration": [
+     -2.1241855789781527,
+     -3.4931399030783155
+    ],
+    "accel_magnitude": 4.088299249861333,
+    "turn_rate_deg_s": 3.7649120305877766,
+    "movement_state": "moving",
+    "speed_category": null,
+    "position_std": 0.26401841456684005
+   },
+   "kinematics_world": {
+    "units": "m",
+    "position": [
+     5.9097283025651315,
+     3.1098300058923476
+    ],
+    "velocity": [
+     -1.3656744869457524,
+     -0.06492307880071246
+    ],
+    "speed": 1.367216811795228,
+    "heading_deg": -177.2782533436293,
+    "acceleration": [
+     -0.05430638615466958,
+     0.09145333467449109
+    ],
+    "accel_magnitude": 0.10636209851382475,
+    "turn_rate_deg_s": -3.93626797023809,
+    "movement_state": "moving",
+    "speed_category": "walk",
+    "position_std": 0.025025791904397722
+   },
+   "height": {
+    "status": "unavailable",
+    "meters": null,
+    "interval_m": null,
+    "relative_image_height": 0.02711864406779661,
+    "reason": "calibration has no camera height / reference object"
+   },
+   "forecast": {
+    "track_id": 1,
+    "horizon_seconds": 3.0,
+    "coordinate_system": "ground_plane_meters",
+    "prediction_source": "trained_model",
+    "model_version": "socialmdn-zara1-holdout-v1",
+    "probability_type": "calibrated_probability",
+    "calibration_status": "validated_on_heldout_data",
+    "trajectories": [
+     {
+      "id": "B",
+      "rank": 0,
+      "probability": 0.2752876281738281,
+      "times": [
+       0.0,
+       0.8,
+       1.6,
+       2.4
+      ],
+      "points": [
+       [
+        5.909728527069092,
+        3.109829902648926
+       ],
+       [
+        4.841217517852783,
+        3.06199312210083
+       ],
+       [
+        3.7492973804473877,
+        3.029406785964966
+       ],
+       [
+        2.6904907226562504,
+        3.015634059906006
+       ]
+      ],
+      "image_points": [
+       [
+        282.0,
+        411.1
+       ],
+       [
+        239.2,
+        413.0
+       ],
+       [
+        195.6,
+        414.3
+       ],
+       [
+        153.2,
+        414.8
+       ]
+      ],
+      "sigma": [
+       [
+        0.001,
+        0.001,
+        1.5707963267948966
+       ],
+       [
+        0.04031578477402713,
+        0.040139069656563844,
+        -2.9742659143030554
+       ],
+       [
+        0.07719526852695617,
+        0.07301338005652251,
+        1.7381230572993285
+       ],
+       [
+        0.11259960644347487,
+        0.10784003743975934,
+        1.7381233274315562
+       ]
+      ],
+      "band_left": [
+       [
+        282.0,
+        411.1
+       ],
+       [
+        239.3,
+        416.2
+       ],
+       [
+        195.6,
+        420.4
+       ],
+       [
+        153.4,
+        423.8
+       ]
+      ],
+      "band_right": [
+       [
+        282.0,
+        411.0
+       ],
+       [
+        239.1,
+        409.8
+       ],
+       [
+        195.5,
+        408.1
+       ],
+       [
+        153.0,
+        405.8
+       ]
+      ]
+     },
+     {
+      "id": "D",
+      "rank": 1,
+      "probability": 0.23015664517879486,
+      "times": [
+       0.0,
+       0.8,
+       1.6,
+       2.4
+      ],
+      "points": [
+       [
+        5.909728527069092,
+        3.109829902648926
+       ],
+       [
+        4.883432388305664,
+        3.0819742679595947
+       ],
+       [
+        3.9192962646484375,
+        3.067185401916504
+       ],
+       [
+        3.0048859119415288,
+        3.049779176712036
+       ]
+      ],
+      "image_points": [
+       [
+        282.0,
+        411.1
+       ],
+       [
+        240.9,
+        412.2
+       ],
+       [
+        202.4,
+        412.8
+       ],
+       [
+        165.8,
+        413.5
+       ]
+      ],
+      "sigma": [
+       [
+        0.001,
+        0.001,
+        1.5707963267948966
+       ],
+       [
+        0.04680616907409098,
+        0.041129486790976416,
+        -2.9742659068480712
+       ],
+       [
+        0.08716371336943741,
+        0.08348513196883271,
+        -2.9742658351383406
+       ],
+       [
+        0.12482437610660063,
+        0.12480061828027897,
+        -2.974358350330967
+       ]
+      ],
+      "band_left": [
+       [
+        282.0,
+        411.1
+       ],
+       [
+        241.0,
+        415.5
+       ],
+       [
+        202.5,
+        419.5
+       ],
+       [
+        165.7,
+        423.5
+       ]
+      ],
+      "band_right": [
+       [
+        282.0,
+        411.0
+       ],
+       [
+        240.8,
+        408.9
+       ],
+       [
+        202.3,
+        406.1
+       ],
+       [
+        165.8,
+        403.5
+       ]
+      ]
+     },
+     {
+      "id": "A",
+      "rank": 2,
+      "probability": 0.21100471913814545,
+      "times": [
+       0.0,
+       0.8,
+       1.6,
+       2.4
+      ],
+      "points": [
+       [
+        5.909728527069092,
+        3.109829902648926
+       ],
+       [
+        4.854722023010254,
+        3.1382052898406982
+       ],
+       [
+        3.802248001098633,
+        3.221728563308716
+       ],
+       [
+        2.813484907150269,
+        3.4018242359161377
+       ]
+      ],
+      "image_points": [
+       [
+        282.0,
+        411.1
+       ],
+       [
+        239.8,
+        409.9
+       ],
+       [
+        197.7,
+        406.6
+       ],
+       [
+        158.1,
+        399.4
+       ]
+      ],
+      "sigma": [
+       [
+        0.001,
+        0.001,
+        1.5707963267948966
+       ],
+       [
+        0.05860303137098157,
+        0.05852937969901736,
+        -2.974259899872504
+       ],
+       [
+        0.1309257874708471,
+        0.1081839240591515,
+        -2.9742659555427577
+       ],
+       [
+        0.21921105328653237,
+        0.14785541550328477,
+        -2.9742658983425345
+       ]
+      ],
+      "band_left": [
+       [
+        282.0,
+        411.1
+       ],
+       [
+        239.4,
+        414.6
+       ],
+       [
+        196.5,
+        415.3
+       ],
+       [
+        156.3,
+        411.7
+       ]
+      ],
+      "band_right": [
+       [
+        282.0,
+        411.0
+       ],
+       [
+        240.1,
+        405.3
+       ],
+       [
+        198.8,
+        397.8
+       ],
+       [
+        159.9,
+        387.0
+       ]
+      ]
+     }
+    ],
+    "residual_probability": 0.28355103731155396,
+    "history_steps_used": 8,
+    "warnings": []
+   }
+  },
+  {
+   "track_id": 2,
+   "state": "confirmed",
+   "age_s": 5.9,
+   "hits": 60,
+   "time_since_update_s": 0.0,
+   "tracker_confidence": 0.99,
+   "bbox": [
+    271.2,
+    372.6,
+    287.2,
+    388.6
+   ],
+   "det_confidence": 0.99,
+   "footpoint_px": [
+    279.3,
+    388.4
+   ],
+   "keypoints": null,
+   "history_px": [
+    [
+     299.6,
+     387.2,
+     -0.4
+    ],
+    [
+     294.5,
+     387.6,
+     -0.3
+    ],
+    [
+     289.4,
+     387.9,
+     -0.2
+    ],
+    [
+     284.3,
+     388.2,
+     -0.1
+    ],
+    [
+     279.3,
+     388.4,
+     0.0
+    ]
+   ],
+   "history_world": [
+    [
+     6.35,
+     3.706,
+     -0.4
+    ],
+    [
+     6.223,
+     3.697,
+     -0.3
+    ],
+    [
+     6.096,
+     3.689,
+     -0.2
+    ],
+    [
+     5.969,
+     3.682,
+     -0.1
+    ],
+    [
+     5.842,
+     3.676,
+     0.0
+    ]
+   ],
+   "kinematics": {
+    "units": "px",
+    "position": [
+     279.26907704229865,
+     388.4434595718458
+    ],
+    "velocity": [
+     -50.55514585419724,
+     2.471328059179533
+    ],
+    "speed": 50.61551377507932,
+    "heading_deg": 177.20139188794806,
+    "acceleration": [
+     1.8124598917021926,
+     -4.289636357007979
+    ],
+    "accel_magnitude": 4.656821977958124,
+    "turn_rate_deg_s": 4.7498199482130286,
+    "movement_state": "moving",
+    "speed_category": null,
+    "position_std": 0.26401841456684005
+   },
+   "kinematics_world": {
+    "units": "m",
+    "position": [
+     5.842228768688132,
+     3.675513832455647
+    ],
+    "velocity": [
+     -1.2635589022600255,
+     -0.06000691025903362
+    ],
+    "speed": 1.2649829756796716,
+    "heading_deg": -177.28104367651034,
+    "acceleration": [
+     0.04571106319679673,
+     0.11153921797294984
+    ],
+    "accel_magnitude": 0.12054251716551617,
+    "turn_rate_deg_s": -4.948123700624883,
+    "movement_state": "moving",
+    "speed_category": "walk",
+    "position_std": 0.025025791904397722
+   },
+   "height": {
+    "status": "unavailable",
+    "meters": null,
+    "interval_m": null,
+    "relative_image_height": 0.02711864406779661,
+    "reason": "calibration has no camera height / reference object"
+   },
+   "forecast": {
+    "track_id": 2,
+    "horizon_seconds": 3.0,
+    "coordinate_system": "ground_plane_meters",
+    "prediction_source": "trained_model",
+    "model_version": "socialmdn-zara1-holdout-v1",
+    "probability_type": "calibrated_probability",
+    "calibration_status": "validated_on_heldout_data",
+    "trajectories": [
+     {
+      "id": "B",
+      "rank": 0,
+      "probability": 0.29401329159736633,
+      "times": [
+       0.0,
+       0.8,
+       1.6,
+       2.4
+      ],
+      "points": [
+       [
+        5.842228889465332,
+        3.675513744354248
+       ],
+       [
+        4.845383644104004,
+        3.634556531906128
+       ],
+       [
+        3.810873031616211,
+        3.601083278656006
+       ],
+       [
+        2.8037536144256596,
+        3.6004559993743896
+       ]
+      ],
+      "image_points": [
+       [
+        279.3,
+        388.4
+       ],
+       [
+        239.4,
+        390.1
+       ],
+       [
+        198.0,
+        391.4
+       ],
+       [
+        157.7,
+        391.4
+       ]
+      ],
+      "sigma": [
+       [
+        0.001,
+        0.001,
+        1.5707963267948966
+       ],
+       [
+        0.03780623108629524,
+        0.036390482963417764,
+        -2.9675670138370656
+       ],
+       [
+        0.06566881236489167,
+        0.06539502480454462,
+        -2.9675671830951464
+       ],
+       [
+        0.0958846804548945,
+        0.09510839902994377,
+        -2.9675666741954156
+       ]
+      ],
+      "band_left": [
+       [
+        279.3,
+        388.5
+       ],
+       [
+        239.5,
+        393.0
+       ],
+       [
+        198.0,
+        396.6
+       ],
+       [
+        157.9,
+        399.0
+       ]
+      ],
+      "band_right": [
+       [
+        279.3,
+        388.4
+       ],
+       [
+        239.3,
+        387.2
+       ],
+       [
+        198.0,
+        386.2
+       ],
+       [
+        157.5,
+        383.8
+       ]
+      ]
+     },
+     {
+      "id": "D",
+      "rank": 1,
+      "probability": 0.21880298852920532,
+      "times": [
+       0.0,
+       0.8,
+       1.6,
+       2.4
+      ],
+      "points": [
+       [
+        5.842228889465332,
+        3.675513744354248
+       ],
+       [
+        4.879312515258789,
+        3.6496458053588867
+       ],
+       [
+        3.9550836086273193,
+        3.63490891456604
+       ],
+       [
+        3.0674445629119877,
+        3.6263723373413086
+       ]
+      ],
+      "image_points": [
+       [
+        279.3,
+        388.4
+       ],
+       [
+        240.8,
+        389.5
+       ],
+       [
+        203.8,
+        390.1
+       ],
+       [
+        168.3,
+        390.4
+       ]
+      ],
+      "sigma": [
+       [
+        0.001,
+        0.001,
+        1.5707963267948966
+       ],
+       [
+        0.044514325256401865,
+        0.03864418779684359,
+        -2.9675672012726357
+       ],
+       [
+        0.08145479137847707,
+        0.07583254697875574,
+        -2.967567173512103
+       ],
+       [
+        0.11589760961474746,
+        0.11351413479871765,
+        -2.9675675723435826
+       ]
+      ],
+      "band_left": [
+       [
+        279.3,
+        388.5
+       ],
+       [
+        240.8,
+        392.6
+       ],
+       [
+        203.8,
+        396.1
+       ],
+       [
+        168.4,
+        399.5
+       ]
+      ],
+      "band_right": [
+       [
+        279.3,
+        388.4
+       ],
+       [
+        240.7,
+        386.4
+       ],
+       [
+        203.8,
+        384.0
+       ],
+       [
+        168.2,
+        381.3
+       ]
+      ]
+     },
+     {
+      "id": "A",
+      "rank": 2,
+      "probability": 0.21605339646339417,
+      "times": [
+       0.0,
+       0.8,
+       1.6,
+       2.4
+      ],
+      "points": [
+       [
+        5.842228889465332,
+        3.675513744354248
+       ],
+       [
+        4.846927642822266,
+        3.704235792160034
+       ],
+       [
+        3.834491729736328,
+        3.771969795227051
+       ],
+       [
+        2.8708493709564213,
+        3.9423739910125732
+       ]
+      ],
+      "image_points": [
+       [
+        279.3,
+        388.4
+       ],
+       [
+        239.5,
+        387.3
+       ],
+       [
+        199.0,
+        384.6
+       ],
+       [
+        160.4,
+        377.8
+       ]
+      ],
+      "sigma": [
+       [
+        0.001,
+        0.001,
+        1.5707963267948966
+       ],
+       [
+        0.055056957613663096,
+        0.05321765267257425,
+        -2.9675674332509336
+       ],
+       [
+        0.12208685334559828,
+        0.09622135578521966,
+        -2.9675671634121867
+       ],
+       [
+        0.20525374673675237,
+        0.13201519376326537,
+        -2.9675671742644973
+       ]
+      ],
+      "band_left": [
+       [
+        279.3,
+        388.5
+       ],
+       [
+        239.1,
+        391.5
+       ],
+       [
+        198.1,
+        392.4
+       ],
+       [
+        158.8,
+        388.9
+       ]
+      ],
+      "band_right": [
+       [
+        279.3,
+        388.4
+       ],
+       [
+        239.8,
+        383.0
+       ],
+       [
+        199.9,
+        376.7
+       ],
+       [
+        162.0,
+        366.6
+       ]
+      ]
+     }
+    ],
+    "residual_probability": 0.2711302936077118,
+    "history_steps_used": 8,
+    "warnings": []
+   }
+  }
+ ],
+ "detections": 10,
+ "events": [
+  {
+   "stage": "frame_received",
+   "label": "Frame received",
+   "t_start_ms": 1794599346657.3823,
+   "duration_ms": 0.0,
+   "status": "ok",
+   "inputs": {
+    "bytes": 0,
+    "source": "dataset_replay"
+   },
+   "outputs": {
+    "width": 704,
+    "height": 590,
+    "frame_id": 59
+   },
+   "confidence": null,
+   "explanation": "Frame decoded from JPEG into an image array.",
+   "error": null
+  },
+  {
+   "stage": "detector",
+   "label": "Person detector executed",
+   "t_start_ms": 1794599346657.403,
+   "duration_ms": 0.0397849998989841,
+   "status": "ok",
+   "inputs": {
+    "model": "dataset annotations (no detector)",
+    "conf_low": 0.1,
+    "conf_high": 0.35,
+    "iou": 0.5,
+    "imgsz": 640,
+    "device": "cpu"
+   },
+   "outputs": {
+    "people_detected": 10,
+    "low_score_candidates": 0,
+    "confidences": [
+     0.99,
+     0.99,
+     0.99,
+     0.99,
+     0.99,
+     0.99,
+     0.99,
+     0.99,
+     0.99,
+     0.99
+    ]
+   },
+   "confidence": 0.99,
+   "explanation": "YOLO looks for the 'person' class and returns boxes with confidence scores.",
+   "error": null
+  },
+  {
+   "stage": "pose",
+   "label": "Pose estimation executed",
+   "t_start_ms": 1794599346657.4556,
+   "duration_ms": 0.002816999767674133,
+   "status": "skipped",
+   "inputs": {
+    "model": null,
+    "people": 10,
+    "every_nth_frame": 3
+   },
+   "outputs": {
+    "reason": "disabled"
+   },
+   "confidence": null,
+   "explanation": "Estimates 17 body joints per detected person (separate YOLO-pose pass, matched to boxes). On frames in between, the last joints are carried along with the person's box for up to 0.6 s. Used for the skeleton overlay and the upright/full-body check for height. No face analysis.",
+   "error": null
+  },
+  {
+   "stage": "tracker",
+   "label": "Tracker updated (ByteTrack)",
+   "t_start_ms": 1794599346657.4656,
+   "duration_ms": 0.7091939996826113,
+   "status": "ok",
+   "inputs": {
+    "detections": 10,
+    "dt_s": 0.1
+   },
+   "outputs": {
+    "high_detections": 10,
+    "low_detections": 0,
+    "matched_high": 10,
+    "recovered_low": 0,
+    "matched_tentative": 0,
+    "new_tracks": 0,
+    "newly_lost": 0,
+    "removed": 0,
+    "active": 10,
+    "lost": 0,
+    "tentative": 0
+   },
+   "confidence": null,
+   "explanation": "Detections are linked to existing tracks by box overlap; low-confidence boxes can only extend existing tracks.",
+   "error": null
+  },
+  {
+   "stage": "calibration",
+   "label": "Camera calibration status",
+   "t_start_ms": 1794599346658.182,
+   "duration_ms": 0.0,
+   "status": "ok",
+   "inputs": {},
+   "outputs": {
+    "status": "calibrated_verified",
+    "coordinate_system": "ground_plane_meters",
+    "height_estimation": false
+   },
+   "confidence": null,
+   "explanation": "Without calibration, positions and speeds are in image pixels and metric height is unknown.",
+   "error": null
+  },
+  {
+   "stage": "kinematics",
+   "label": "Kinematic state updated",
+   "t_start_ms": 1794599346658.1926,
+   "duration_ms": 3.8980859999355744,
+   "status": "ok",
+   "inputs": {
+    "filter": "constant-acceleration Kalman",
+    "coordinate_system": "ground_plane_meters"
+   },
+   "outputs": {
+    "tracks": 10,
+    "speeds": {
+     "1": 1.367,
+     "2": 1.265,
+     "3": 1.018,
+     "4": 0.965,
+     "5": 0.935,
+     "6": 1.323,
+     "7": 1.53,
+     "8": 0.143,
+     "9": 1.261,
+     "10": 0.89
+    },
+    "units": "m/s"
+   },
+   "confidence": null,
+   "explanation": "Each person's ground-contact point is smoothed and differentiated to get speed, heading, acceleration and turn rate.",
+   "error": null
+  },
+  {
+   "stage": "forecast",
+   "label": "Forecast model executed",
+   "t_start_ms": 1794599346662.1025,
+   "duration_ms": 10.933047999969858,
+   "status": "ok",
+   "inputs": {
+    "requested": "learned",
+    "horizon_s": 3.0,
+    "hypotheses": 3
+   },
+   "outputs": {
+    "source": "trained_model",
+    "model_version": "socialmdn-zara1-holdout-v1",
+    "model_input": {
+     "steps": 8,
+     "dt_s": 0.4,
+     "tracks": 10,
+     "normalisation": "none (meters)"
+    },
+    "latency_ms": 10.909,
+    "tracks_forecast": 10,
+    "horizons_s": [
+     0.5,
+     1.0,
+     2.0,
+     3.0
+    ]
+   },
+   "confidence": null,
+   "explanation": "Predicts where each confirmed person may be over the next seconds.",
+   "error": null
+  },
+  {
+   "stage": "hypotheses",
+   "label": "Trajectory hypotheses generated",
+   "t_start_ms": 1794599346673.0586,
+   "duration_ms": 0.0,
+   "status": "ok",
+   "inputs": {},
+   "outputs": {
+    "tracks_forecast": 10,
+    "hypotheses": 30,
+    "per_track": {
+     "1": [
+      "B",
+      "D",
+      "A"
+     ],
+     "2": [
+      "B",
+      "D",
+      "A"
+     ],
+     "3": [
+      "B",
+      "D",
+      "A"
+     ],
+     "4": [
+      "B",
+      "D",
+      "E"
+     ],
+     "5": [
+      "B",
+      "D",
+      "A"
+     ],
+     "6": [
+      "B",
+      "E",
+      "D"
+     ],
+     "7": [
+      "B",
+      "D",
+      "E"
+     ],
+     "8": [
+      "D",
+      "B",
+      "E"
+     ],
+     "9": [
+      "B",
+      "D",
+      "A"
+     ],
+     "10": [
+      "B",
+      "D",
+      "E"
+     ]
+    }
+   },
+   "confidence": null,
+   "explanation": "Each hypothesis is one possible future path with growing uncertainty.",
+   "error": null
+  },
+  {
+   "stage": "probabilities",
+   "label": "Probabilities calculated",
+   "t_start_ms": 1794599346673.0957,
+   "duration_ms": 0.0,
+   "status": "ok",
+   "inputs": {},
+   "outputs": {
+    "1": {
+     "type": "calibrated_probability",
+     "values": [
+      0.275,
+      0.23,
+      0.211
+     ],
+     "residual": 0.28355103731155396
+    },
+    "2": {
+     "type": "calibrated_probability",
+     "values": [
+      0.294,
+      0.219,
+      0.216
+     ],
+     "residual": 0.2711302936077118
+    },
+    "3": {
+     "type": "calibrated_probability",
+     "values": [
+      0.305,
+      0.213,
+      0.205
+     ],
+     "residual": 0.2765774130821228
+    },
+    "4": {
+     "type": "calibrated_probability",
+     "values": [
+      0.3,
+      0.218,
+      0.199
+     ],
+     "residual": 0.2838556170463562
+    },
+    "5": {
+     "type": "calibrated_probability",
+     "values": [
+      0.279,
+      0.23,
+      0.194
+     ],
+     "residual": 0.2968970239162445
+    },
+    "6": {
+     "type": "calibrated_probability",
+     "values": [
+      0.239,
+      0.234,
+      0.223
+     ],
+     "residual": 0.30448561906814575
+    },
+    "7": {
+     "type": "calibrated_probability",
+     "values": [
+      0.244,
+      0.227,
+      0.211
+     ],
+     "residual": 0.31760919094085693
+    },
+    "8": {
+     "type": "calibrated_probability",
+     "values": [
+      0.36,
+      0.22,
+      0.148
+     ],
+     "residual": 0.27183520793914795
+    },
+    "9": {
+     "type": "calibrated_probability",
+     "values": [
+      0.325,
+      0.22,
+      0.205
+     ],
+     "residual": 0.2497381567955017
+    },
+    "10": {
+     "type": "calibrated_probability",
+     "values": [
+      0.244,
+      0.225,
+      0.221
+     ],
+     "residual": 0.3093620538711548
+    }
+   },
+   "confidence": null,
+   "explanation": "Softmax over the model's mode scores, temperature-scaled on validation data. Labelled 'uncalibrated weight' when the live setting differs from the validated one.",
+   "error": null
+  }
+ ],
+ "warnings": [],
+ "camera_calibration": {
+  "status": "calibrated_verified",
+  "coordinate_system": "ground_plane_meters",
+  "homography": [
+   [
+    17.6,
+    0.0,
+    -1.139538367682
+   ],
+   [
+    0.0,
+    -14.75,
+    13.3864436051
+   ],
+   [
+    0.0,
+    0.0,
+    1.0
+   ]
+  ],
+  "homography_inv": [
+   [
+    0.056818181818181816,
+    0.0,
+    0.06474649816374999
+   ],
+   [
+    -0.0,
+    -0.06779661016949153,
+    0.9075554986508475
+   ],
+   [
+    0.0,
+    0.0,
+    1.0
+   ]
+  ],
+  "image_points": [],
+  "world_points": [],
+  "rms_error_m": 0.0,
+  "horizon_v": [
+   null,
+   null
+  ],
+  "camera_height_m": null,
+  "camera_height_source": null,
+  "height_estimation": false,
+  "warnings": [
+   "Virtual top-down camera for dataset replay (exact calibration)."
+  ]
+ },
+ "camera_motion": null,
+ "stats": {
+  "frames_received": 0,
+  "frames_processed": 60,
+  "frames_dropped": 0,
+  "input_fps": 10.0,
+  "inference_fps": 30.7,
+  "mean_processing_ms": 32.57,
+  "device": "cpu",
+  "forecaster_active": "trained_model"
+ },
+ "replay_ground_truth": null,
+ "frame_jpeg_b64": null,
+ "note": "Example payload from dataset-replay mode (zara1, held out from the active model). Arrays subsampled for brevity."
+}

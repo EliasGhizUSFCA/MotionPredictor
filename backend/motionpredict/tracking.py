@@ -102,6 +102,17 @@ class Track:
     last_det_box: np.ndarray | None = None
     matched_this_frame: bool = True
     meta: dict = field(default_factory=dict)
+    kp_t: float | None = None
+    kp_box: np.ndarray | None = None
+
+    def current_keypoints(self, now: float, max_age_s: float = 0.6) -> list | None:
+        """Latest keypoints, translated with the box if they come from an earlier pose pass."""
+        if self.keypoints is None or self.kp_t is None or now - self.kp_t > max_age_s or self.last_det_box is None:
+            return None
+        if self.kp_box is None:
+            return self.keypoints
+        d = (self.last_det_box[:2] + self.last_det_box[2:]) / 2 - (self.kp_box[:2] + self.kp_box[2:]) / 2
+        return [[k[0] + float(d[0]), k[1] + float(d[1]), k[2]] for k in self.keypoints]
 
     def confidence(self, now: float, buffer_s: float) -> float:
         """Heuristic tracker confidence in [0,1]: detection score x maturity x recency."""
@@ -207,6 +218,8 @@ class ByteTracker:
                 continue
             tr = Track(self.next_id, BoxKF(np.array(d.bbox)), t, t, d.confidence, d.keypoints)
             tr.last_det_box = np.array(d.bbox)
+            if d.keypoints is not None:
+                tr.kp_t, tr.kp_box = t, np.array(d.bbox)
             if self.frame_count == 1:
                 tr.state = "confirmed"
             self.next_id += 1
@@ -231,7 +244,10 @@ class ByteTracker:
         tr.kf.update(np.array(d.bbox))
         tr.last_t = t
         tr.det_conf = d.confidence
-        tr.keypoints = d.keypoints
+        if d.keypoints is not None:  # pose may run only on some frames; keep the last set otherwise
+            tr.keypoints = d.keypoints
+            tr.kp_t = t
+            tr.kp_box = np.array(d.bbox)
         tr.hits += 1
         tr.consecutive_hits += 1
         tr.matched_this_frame = True
